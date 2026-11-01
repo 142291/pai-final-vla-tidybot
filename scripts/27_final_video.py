@@ -58,8 +58,17 @@ def caption_png(path, ja, en, who=None):
     """画面下の字幕(日本語+英語)。who を渡すと「ロボット」などの話し手を色付きで前に付ける。"""
     im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    fj, fe, fw = font(FONT_B, 44), font(FONT_R, 30), font(FONT_B, 44)
     lines = ja.split("\n")
+    # 横幅に収まらない字幕は、収まるまで文字を小さくする(はみ出して切れるのを防ぐ)
+    probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    sj = 44
+    while sj > 30 and max(probe.textlength(l, font=font(FONT_B, sj)) for l in lines) + (
+            probe.textlength(who, font=font(FONT_B, sj)) + 18 if who else 0) > W - 160:
+        sj -= 2
+    se = 30
+    while en and se > 22 and max(probe.textlength(l, font=font(FONT_R, se)) for l in en.split("\n")) > W - 160:
+        se -= 1
+    fj, fe, fw = font(FONT_B, sj), font(FONT_R, se), font(FONT_B, sj)
     pad, gap = 22, 10
     hj = 58 * len(lines)
     he = 40 * len(en.split("\n")) if en else 0
@@ -107,6 +116,52 @@ def card_png(path, title, sub, body=""):
     im.save(path)
 
 
+def why_png(path, title, items):
+    """「なぜ取り組むか」の 1 枚。items は (日本語, 英語) の並び。"""
+    im = Image.new("RGB", (W, H), "#111111")
+    d = ImageDraw.Draw(im)
+    d.text((140, 170), title, font=font(FONT_B, 64), fill="#f0efec")
+    y = 330
+    for k, (ja, en) in enumerate(items):
+        d.text((140, y), "●", font=font(FONT_B, 36), fill="#eb6834" if k == len(items) - 1 else "#7fb2ee")
+        d.text((200, y - 4), ja, font=font(FONT_B, 42), fill="#f0efec")
+        d.text((200, y + 60), en, font=font(FONT_R, 28), fill="#a9a8a0")
+        y += 170
+    im.save(path)
+
+
+def system_png(path, title, boxes, branch):
+    """しくみの全体図。boxes は左から右へ並ぶ (見出し, 説明) の箱、branch は判定の下に出る失敗時の流れ。"""
+    im = Image.new("RGB", (W, H), "#111111")
+    d = ImageDraw.Draw(im)
+    d.text((120, 110), title, font=font(FONT_B, 56), fill="#f0efec")
+    n, bw, gap, y0, bh = len(boxes), 300, 60, 330, 220
+    x0 = (W - (n * bw + (n - 1) * gap)) // 2
+    centers = []
+    for k, (head, body) in enumerate(boxes):
+        x = x0 + k * (bw + gap)
+        d.rounded_rectangle([x, y0, x + bw, y0 + bh], radius=18, outline="#7fb2ee", width=4, fill="#1b2430")
+        d.text((x + 24, y0 + 24), head, font=font(FONT_B, 36), fill="#f0efec")
+        yy = y0 + 84
+        for line in body.split("\n"):
+            d.text((x + 24, yy), line, font=font(FONT_R, 26), fill="#c3c2b7")
+            yy += 38
+        if k < n - 1:
+            ax = x + bw + 8
+            d.line([ax, y0 + bh // 2, ax + gap - 16, y0 + bh // 2], fill="#f0efec", width=5)
+            d.polygon([(ax + gap - 16, y0 + bh // 2 - 12), (ax + gap - 4, y0 + bh // 2), (ax + gap - 16, y0 + bh // 2 + 12)], fill="#f0efec")
+        centers.append(x + bw // 2)
+    # 判定(最後の箱)の下に、失敗したときの流れ
+    cx = centers[-1]
+    d.line([cx, y0 + bh + 8, cx, y0 + bh + 70], fill="#eb6834", width=5)
+    d.text((cx + 16, y0 + bh + 18), "失敗", font=font(FONT_B, 30), fill="#eb6834")
+    bx1 = x0 + (n - 4) * (bw + gap)
+    d.rounded_rectangle([bx1, y0 + bh + 80, x0 + n * bw + (n - 1) * gap, y0 + bh + 200], radius=18, outline="#eb6834", width=4, fill="#2a1d18")
+    d.text((bx1 + 28, y0 + bh + 100), branch[0], font=font(FONT_B, 34), fill="#f0efec")
+    d.text((bx1 + 28, y0 + bh + 150), branch[1], font=font(FONT_R, 26), fill="#c3c2b7")
+    im.save(path)
+
+
 def wilson(k, n, z=1.96):
     p = k / n
     den = 1 + z * z / n
@@ -115,12 +170,14 @@ def wilson(k, n, z=1.96):
     return c - h, c + h
 
 
-def bars_png(path, title, bars, note=""):
+def bars_png(path, title, bars, note="", big=""):
     """成功率の棒グラフ(95% 信頼区間つき)を動画の画面全体の大きさで描く。字幕の分、下を空ける。"""
     fig = plt.figure(figsize=(W / 100, H / 100), dpi=100, facecolor=SURFACE)
     fig.text(0.06, 0.90, title, fontsize=34, color=INK, va="center")
     if note:
         fig.text(0.06, 0.84, note, fontsize=20, color=INK2, va="center")
+    if big:
+        fig.text(0.86, 0.875, big, fontsize=58, color=BLUE, ha="right", va="center", weight="bold")
     ax = fig.add_axes([0.10, 0.38, 0.82, 0.40], facecolor=SURFACE)
     for x, (label, k, n, col) in enumerate(bars):
         p = k / n
@@ -177,15 +234,24 @@ SCENES = [
     ]),
     S("title", card=("VLA はなぜ掴めないのか", "Why couldn't my VLA grasp? — tracking down the causes on a real SO-101",
                      "自前データで π0.5 を学習させ、原因を一つずつ切り分けて、言葉で頼める片付けロボットにした"), dur=4),
+    S("why", why=("なぜ取り組むか", [
+        ("クラウドの GPU で VLA を動かすと、観測から行動まで約 1 秒遅れる", "Running a VLA on a cloud GPU adds ~1 s between observation and action"),
+        ("学習は順調でも、実機では「すぐ上まで行って掴めない」が起きる", "Training looks fine, yet the real robot hovers and misses"),
+        ("原因を切り分けて直し、失敗したら理由を説明して人に頼めるようにする", "Find and fix the cause; when it still fails, explain why and ask a human"),
+    ]), dur=6),
+    S("system", system=("しくみ", [
+        ("言葉で頼む", "「紫以外を\n片付けて」"), ("段取り", "Claude が俯瞰の\n画像を見て色の\n順番を決める"),
+        ("動かす", "π0.5(自前データで\n学習)を H200 で\n推論、止まって考える"), ("判定", "俯瞰カメラで\n箱の中に 1 秒\n止まったら成功")],
+        ("Claude が失敗の理由を説明 → やり直し(3 回まで)→ 人を呼ぶ", "人はリーダーアームで引き取る(操作は学習データとして保存)")), dur=6),
     S("diagnose", image=("fig_horizon.png", "原因: 予測の何ステップ先ほど外れるか"), dur=12, chapter="原因", caps=[
         (0, 6, "人の操作と比べると、予測(action chunk)は先のステップほど外れる(誤差 3.3 → 13.1)",
          "Against human teleoperation, the action chunk drifts further out (error 3.3 → 13.1)", None),
         (6, 12, "推論の往復に約 1 秒。その間に、外れやすい予測の後半を実行していた(最有力の原因)",
          "With a ~1 s round trip, the robot executed the least accurate tail of each chunk (most likely cause)", None),
     ]),
-    S("fix", bars=("解決: 止まって考える実行(先頭 15 ステップだけ実行する同期実行)", "同じモデル・決めた 15 配置(5 か所 × 3 色)", [
+    S("fix", bars=("解決: 止まって考える実行", "同じモデル・決めた 15 配置(5 か所 × 3 色)", [
         ("標準(非同期)\n10/31", 5, 15, MUTED), ("止まって考える\n10/31(同じ晩)", 12, 15, BLUE), ("止まって考える\n10/28", 14, 15, BLUE)]),
-      dur=10, chapter="解決", caps=[
+      big="33% → 80%", dur=10, chapter="解決", caps=[
         (0, 5, "先頭の 15 ステップ(0.5 秒)だけ動かして止まり、最新の画像で予測し直す",
          "Run only the first 15 steps (0.5 s), stop, and re-predict from a fresh image", None),
         (5, 10, "同じ晩どうしで 33% → 80%。別の晩は 93%",
@@ -389,7 +455,11 @@ def render(sc, i):
         if "card" in sc:
             card_png(png, *sc["card"])
         elif "bars" in sc:
-            bars_png(png, sc["bars"][0], sc["bars"][2], sc["bars"][1])
+            bars_png(png, sc["bars"][0], sc["bars"][2], sc["bars"][1], sc.get("big", ""))
+        elif "why" in sc:
+            why_png(png, *sc["why"])
+        elif "system" in sc:
+            system_png(png, *sc["system"])
         elif "image" in sc:
             image_card_png(png, os.path.join(FIG, sc["image"][0]), sc["image"][1])
         dur = sc["dur"]
