@@ -249,21 +249,21 @@ SCENES = [
         (6, 12, "推論の往復に約 1 秒。その間に、外れやすい予測の後半を実行していた(最有力の原因)",
          "With a ~1 s round trip, the robot executed the least accurate tail of each chunk (most likely cause)", None),
     ]),
-    S("fix", bars=("解決: 止まって考える実行", "同じモデル・決めた 15 配置(5 か所 × 3 色)", [
-        ("標準(非同期)\n10/31", 5, 15, MUTED), ("止まって考える\n10/31(同じ晩)", 12, 15, BLUE), ("止まって考える\n10/28", 14, 15, BLUE)]),
+    S("fix", bars=("解決: 止まって考える実行", "同じモデル・同じ晩・決めた 15 配置(5 か所 × 3 色)", [
+        ("標準の実行(非同期)", 5, 15, MUTED), ("止まって考える実行", 12, 15, BLUE)]),
       big="33% → 80%", dur=10, chapter="解決", caps=[
         (0, 5, "先頭の 15 ステップ(0.5 秒)だけ動かして止まり、最新の画像で予測し直す",
          "Run only the first 15 steps (0.5 s), stop, and re-predict from a fresh image", None),
-        (5, 10, "同じ晩どうしで 33% → 80%。別の晩は 93%",
-         "Same night: 33% → 80%. Another night: 93%", None),
+        (5, 10, "変えたのは実行の仕方だけ。15 配置中 5 → 12 で成功",
+         "Only the execution changed: 5 → 12 of 15 placements succeed", None),
     ]),
-    S("data", bars=("データの穴と、対照実験", "決めた 15 配置での成功率(止まって考える実行)", [
-        ("R0\n150 本", 8, 15, BLUE), ("R1\n+箱に入った\n状態 45 本", 10, 15, BLUE), ("R2\n+人の手助け", 12, 15, BLUE),
-        ("R3\n+人の手助け", 12, 15, BLUE), ("対照\nR1 のまま\n学習を延長", 14, 15, ORANGE)]), dur=12, chapter="データと対照実験", caps=[
-        (0, 6, "箱にキューブが入った状態から始まる手本が 0 本だった → 45 本足すと、止まらずに動くように",
-         "No demos started with a cube already in the box — adding 45 of them got it moving again", None),
-        (6, 12, "人の手助けを学習に戻す効果は確認できず。手助け無しで学習を延ばした対照が最高",
-         "Feeding human assists back showed no measurable gain; the control with longer training scored highest", None),
+    S("data", bars=("データの穴: 1 個入ると、次が動かない", "箱に入った状態から始まる手本: 144 本中 0 本", [
+        ("R0\n手本 144 本", 8, 15, BLUE), ("R1\n+箱に入った状態・\nすき間 45 本", 10, 15, BLUE)]),
+      big="53% → 67%", dur=10, chapter="データの穴", caps=[
+        (0, 5, "1 個目が箱に入ると、2 個目に取りかからず止まった。その状態の手本が 1 本も無かった",
+         "After the first cube was in the box, it froze: no demo ever started from that state", None),
+        (5, 10, "その状態の手本を 45 本足すと、止まらずに動くようになった",
+         "Adding 45 such demos got it moving again", None),
     ]),
     S("hook", clip=ph("A_except_purple.mp4", 6.0, 17.0), chapter="言葉で頼む", caps=[
         (0, 1.3, "指示「紫以外を片付けて」", "Instruction: \"Tidy up everything except purple\"", None),
@@ -293,15 +293,24 @@ SCENES = [
          "\"...couldn't grasp it. I can't get it. Please help me with the leader arm.\"", "ロボット"),
     ]),
     S("assist", clip=ph("D_red_only_human.mp4", 229.8, 279.5, 4.0), tag=("4× 速送り", "4× speed"), chapter="失敗したら", caps=[
-        (0, 12.5, "人がリーダーアームで引き取る。操作は学習データとして保存(学び直しへの効果は未確認)",
-         "A human takes over with the leader arm; the assist is saved as training data (benefit not confirmed)", None),
+        (0, 12.5, "人がリーダーアームで引き取る。その操作は、そのまま学習データとして保存する",
+         "A human takes over with the leader arm; the assist is saved as training data", None),
     ]),
     S("done", clip=ph("D_red_only_human.mp4", 279.5, 284.5), chapter="失敗したら", caps=[
         (0, 2.6, "箱に入ったことをカメラで確かめて、次へ", "The camera confirms the cube is in the box", None),
         (2.6, 5, "終わりました。", "\"Done.\"", "ロボット"),
     ]),
+    S("relearn", bars=("学び直し: 人の手助けを学習に戻す", "同じ 15 配置。R1 から同じだけ(4,000 step)学習を足して比べた", [
+        ("R1", 10, 15, MUTED), ("対照\nR1 のまま\n学習だけ延長", 10, 15, ORANGE), ("R2\n+人の手助け\n11 区間", 12, 15, BLUE),
+        ("R3\n+人の手助け\n8 区間", 12, 15, BLUE)]), big="67% → 80%", dur=10, chapter="学び直し", caps=[
+        (0, 5, "人が引き取った操作を学習に戻すと 67% → 80%。学習を延ばしただけ(対照)は 67% のまま",
+         "With the human assists added: 67% → 80%. Training longer without them (control): still 67%", None),
+        (5, 10, "ただし差は 15 試行中 2 回。言い切るには試行を増やす必要がある",
+         "But the gap is 2 of 15 trials — more trials are needed to be sure", None),
+    ]),
     S("end", card=("github.com/142291/pai-final-vla-tidybot", "コード・試行ごとの評価記録・説明資料(PDF)を公開 / Code, per-trial logs and the report",
-                   "実行の仕方: 同じ晩・同じ 15 配置で 33% → 80%(別の晩 93%)\n"
+                   "実行の仕方を変えるだけで 33% → 80%(同じモデル・同じ晩・同じ 15 配置)\n"
+                   "人の手助けを学習に戻すと 67% → 80%(学習を延ばしただけの対照は 67%)\n"
                    "通し動作「片付けて」: 自力で 15/24、残りは人を呼んで 24/24\n"
                    "限界: 1 色 20〜45 秒と遅い / 学習に無い物は未検証 / 1 台・評価者 1 人・各 15 試行"), dur=7),
 ]
