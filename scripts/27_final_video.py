@@ -197,7 +197,7 @@ def bars_png(path, title, en, lead, bars):
     fig.text(0.06, 0.925, title, fontsize=36, color=INK, va="center", weight="bold")
     fig.text(0.061, 0.872, en, fontsize=19, color=BLUE, va="center")
     fig.text(0.061, 0.835, lead, fontsize=21, color=INK2, va="top", linespacing=1.6)
-    ax = fig.add_axes([0.10, 0.20, 0.82, 0.47], facecolor=SURFACE)
+    ax = fig.add_axes([0.10, 0.18, 0.82, 0.44], facecolor=SURFACE)
     for x, (label, k, n, col) in enumerate(bars):
         p = k / n
         lo, hi = wilson(k, n)
@@ -243,8 +243,8 @@ def S(name, **kw):
 SCENES = [
     S("compare", pair=(ph("E_async.mp4", 8.0, 27.0), ph("E_sync.mp4", 8.4, 27.4)), crop="900:560:950:380", pair_y=200,
       counter=1.8, chapter="実行の仕方だけを変えて比べる",
-      labels=(("標準の実行(非同期)", "Standard async execution"), ("止まって考える実行", "Stop-and-think execution")), caps=[
-        (0, 5.5, "同じモデル・同じ置き場所。違うのは、行動の実行の仕方だけ",
+      labels=(("非同期実行(LeRobot の標準)", "Asynchronous execution (LeRobot default)"), ("同期実行(止まって考える)", "Synchronous execution: stop and re-think")), caps=[
+        (0, 5.5, "同じモデル・同じ置き場所。違うのは、アクションチャンクの実行の仕方だけ",
          "Same fine-tuned π0.5, same placement — only the way actions are executed differs", None),
         (5.5, 12.5, "左はキューブのすぐ横まで行って、止まったまま掴めない",
          "Left: it reaches the cube, then stalls without grasping", None),
@@ -253,33 +253,34 @@ SCENES = [
     ]),
     S("title", card=("VLA が掴めない原因を切り分け、\n言葉で頼める片付けロボットにした",
                      "Why couldn't my VLA grasp? Tracking down the causes on a real SO-101",
-                     "自前データで π0.5 を学習。原因は「行動の実行の仕方」と「手本に無い状況」だった"), dur=5),
-    S("why", why=("クラウドで動かす VLA は約 1 秒遅れ、実機では掴み損ねる",
-                  "A cloud-hosted VLA lags ~1 s behind, and the real arm misses the grasp", [
-        ("観測から行動まで、推論の往復に約 1 秒。そのあいだもアームは動いている", "~1 s round trip from observation to action, while the arm keeps moving"),
+                     "自前データで π0.5 を学習。原因は「アクションチャンクの実行の仕方」と「デモに無い状況」だった"), dur=5),
+    S("why", why=("クラウドの GPU で VLA を動かすと約 1 秒遅れ、実機では掴み損ねた",
+                  "Running the VLA on a cloud GPU added ~1 s of lag, and the real arm missed the grasp", [
+        ("観測から行動が届くまで約 1 秒(推論遅延)。そのあいだもアームは動いている", "~1 s round trip from observation to action, while the arm keeps moving"),
         ("学習は順調でも、実機では「すぐ横まで行って掴めない」が起きる", "Training looks fine, yet the real robot hovers and misses"),
         ("原因を切り分けて直す。それでも失敗したら理由を説明して人に頼む", "Find and fix the cause; when it still fails, explain why and ask a human"),
     ]), dur=6),
     S("system", system=("言葉で頼むと、Claude が段取りを決め、π0.5 が動かす",
                         "Ask in words: Claude plans the order, π0.5 moves the arm", [
         ("言葉で頼む", "「紫以外を\n片付けて」"), ("段取り", "Claude が俯瞰の\n画像を見て色の\n順番を決める"),
-        ("動かす", "π0.5(自前データで\n学習)を H200 で\n推論、止まって考える"), ("判定", "俯瞰カメラで\n箱の中に 1 秒\n止まったら成功")],
+        ("動かす", "π0.5(自前データで\n学習)を H200 で\n推論、同期実行"), ("判定", "俯瞰カメラで\n箱の中に 1 秒\n止まったら成功")],
         ("Claude が失敗の理由を説明 → やり直し(3 回まで)→ 人を呼ぶ", "人はリーダーアームで引き取る(操作は学習データとして保存)")), dur=6),
-    S("diagnose", image=("fig_horizon.png", "予測は先のステップほど外れ、遅れのあいだにその後半を実行していた",
-                         "The action chunk drifts further out — and the ~1 s lag meant executing its least accurate tail",
-                         "人の操作と比べると、予測(action chunk)の誤差は 3.3 → 13.1 と、先のステップほど大きい\n"
-                         "推論の往復に約 1 秒かかるので、届いたときには予測の後半を実行していた(最有力の原因)"), dur=12),
-    S("fix", bars=("止まって考える実行にすると、成功率は 33% → 80%",
-                   "Stop-and-think execution: 33% → 80% with the same model",
-                   "先頭の 15 ステップ(0.5 秒)だけ動かして止まり、最新の画像で予測し直す\n"
+    S("diagnose", image=("fig_horizon.png", "アクションチャンクは先ほど外れ、遅延のあいだにその後半を実行していた",
+                         "The action chunk drifts further out, and the ~1 s lag meant executing its least accurate tail",
+                         "人の操作と比べた予測の誤差は、0〜5 ステップ目 3.3 → 35〜50 ステップ目 13.1 と、先ほど大きい\n"
+                         "推論遅延が約 1 秒あるので、非同期実行では届いた時点で前半を飛ばし、外れやすい後半を実行していた(最有力の原因)"), dur=12),
+    S("fix", bars=("同期実行に変えると、成功率は 33% → 80%",
+                   "Synchronous execution: 33% → 80% with the same model",
+                   "アクションチャンクの先頭 15 ステップ(0.5 秒)だけ動かして止まり、最新の画像で推論し直す(止まって考える)\n"
+                   "講義(基礎編 第 7 回)の通り同期実行は止まるが、遅延が約 1 秒あるこの構成では、非同期実行より確実に掴めた\n"
                    "同じモデル・同じ晩・決めた 15 配置(5 か所 × 3 色)で、実行の仕方だけを変えて比べた", [
-        ("標準の実行(非同期)", 5, 15, MUTED), ("止まって考える実行", 12, 15, BLUE)]), dur=10),
-    S("data", bars=("箱に 1 個入った後の手本を足すと、止まらずに次を掴みにいった",
-                    "Adding demos that start with a cube already in the box: 53% → 67%",
-                    "最初の手本 144 本には、箱にキューブが入った状態から始まるものが 1 本も無かった\n"
-                    "そのため 1 個目を箱に入れると、次のキューブに取りかからず止まっていた\n"
-                    "その状態と、キューブどうしのすき間の手本を 45 本足して学習し直した", [
-        ("最初の手本 144 本", 8, 15, MUTED), ("+ 箱に入った状態・\nすき間の手本 45 本", 10, 15, BLUE)]), dur=10),
+        ("非同期実行", 5, 15, MUTED), ("同期実行(止まって考える)", 12, 15, BLUE)]), dur=10),
+    S("data", bars=("足りない状況のデモを 45 本足すと、1 個入った後も止まらなくなった",
+                    "Adding 45 demos for missing situations: no more freezing after the first cube",
+                    "最初のデモ 144 本には、箱にキューブが入った状態から始まるものが 1 本も無く、1 個目を入れると止まっていた\n"
+                    "その状態と、置き場所のすき間のデモを 45 本足して追加学習。止まった観測を再生すると、動こうとする量は 1.6 → 120.8\n"
+                    "決めた 15 配置での成功率は 53% → 67%(学習の step も増えているので、デモだけの効果とは言い切れない)", [
+        ("最初のデモ 144 本", 8, 15, MUTED), ("+ 箱に入った状態・\nすき間のデモ 45 本", 10, 15, BLUE)]), dur=10),
     S("hook", clip=ph("A_except_purple.mp4", 6.0, 17.0), chapter="言葉で頼む", caps=[
         (0, 1.3, "指示「紫以外を片付けて」", "Instruction: \"Tidy up everything except purple\"", None),
         (1.3, 6.2, "紫以外の、赤と黄色のキューブを箱に入れますね。", "\"I'll put the red and yellow cubes in the box.\"", "ロボット"),
@@ -308,24 +309,25 @@ SCENES = [
          "\"...couldn't grasp it. I can't get it. Please help me with the leader arm.\"", "ロボット"),
     ]),
     S("assist", clip=ph("D_red_only_human.mp4", 229.8, 279.5, 4.0), tag=("4× 速送り", "4× speed"), chapter="失敗したら人を呼ぶ", caps=[
-        (0, 12.5, "人がリーダーアームで引き取る。その操作は、そのまま学習データとして保存する",
+        (0, 12.5, "人がリーダーアームで引き取る(介入)。その操作は、そのまま学習データとして保存する",
          "A human takes over with the leader arm; the assist is saved as training data", None),
     ]),
     S("done", clip=ph("D_red_only_human.mp4", 279.5, 284.5), chapter="失敗したら人を呼ぶ", caps=[
         (0, 2.6, "箱に入ったことをカメラで確かめて、次へ", "The camera confirms the cube is in the box", None),
         (2.6, 5, "終わりました。", "\"Done.\"", "ロボット"),
     ]),
-    S("relearn", bars=("人が引き取った操作を学習に戻すと、67% → 80%",
-                       "Training on the human takeovers: 67% → 80%. Training longer alone: still 67%",
-                       "ロボットが失敗した場面だけ人がリーダーアームで引き取り、その操作を学習データに足した\n"
+    S("relearn", bars=("人の介入を学習に戻すと、67% → 80%",
+                       "Training on human interventions: 67% → 80%. Training longer alone: still 67%",
+                       "ロボットが失敗した場面だけ人がリーダーアームで引き取り(介入)、その操作を学習データに足した\n"
                        "データを足さずに、学習を同じだけ(+4,000 step)延ばしただけでは 67% のまま\n"
-                       "ただし差は 15 試行中 2 回。言い切るには試行を増やす必要がある", [
+                       "ただし差は 15 試行中 2 回で、言い切るには試行を増やす必要がある\n"
+                       "※ 学習を延ばしただけのモデルの評価では、作者が指で手を貸した 4 回があり、失敗として数えた", [
         ("前のモデル", 10, 15, MUTED), ("学習を延ばしただけ\n(データは同じ)", 10, 15, ORANGE),
-        ("人が引き取った操作を\n足して学習", 12, 15, BLUE)]), dur=10),
+        ("介入のデータを\n足して学習", 12, 15, BLUE)]), dur=10),
     S("end", card=("github.com/142291/pai-final-vla-tidybot", "コード・試行ごとの評価記録・説明資料(PDF)を公開 / Code, per-trial logs and the report",
-                   "実行の仕方を変えるだけで 33% → 80%(同じモデル・同じ晩・同じ 15 配置)\n"
-                   "人が引き取った操作を学習に戻すと 67% → 80%(学習を延ばしただけでは 67%)\n"
-                   "通し動作「片付けて」: 自力で 15/24、残りは人を呼んで 24/24\n"
+                   "同期実行に変えるだけで 33% → 80%(同じモデル・同じ晩・同じ 15 配置)\n"
+                   "人の介入を学習に戻すと 67% → 80%(学習を延ばしただけでは 67%)\n"
+                   "通し動作「片付けて」: 自律化率 15/24、残りは人を呼んで 24/24\n"
                    "限界: 1 色 20〜45 秒と遅い / 学習に無い物は未検証 / 1 台・評価者 1 人・各 15 試行"), dur=7),
 ]
 
