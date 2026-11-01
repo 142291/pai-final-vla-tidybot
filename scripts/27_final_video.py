@@ -104,44 +104,65 @@ def tag_png(path, text, sub=""):
     im.save(path)
 
 
-def card_png(path, title, sub, body=""):
+def fit(text, path, size, maxw, low=24):
+    """横幅 maxw に収まるまで文字を小さくしたフォントを返す。"""
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    while size > low and max(probe.textlength(l, font=font(path, size)) for l in text.split("\n")) > maxw:
+        size -= 2
+    return font(path, size)
+
+
+def head(d, title, en, lead, x, y, maxw, ts=64, ink="#f0efec", sub="#7fb2ee", body="#c3c2b7"):
+    """スライドの上部: 結論のタイトル(日本語)、英訳、詳細のリード文。描き終えた y を返す。"""
+    ft = fit(title, FONT_B, ts, maxw)
+    for line in title.split("\n"):
+        d.text((x, y), line, font=ft, fill=ink)
+        y += int(ft.size * 1.35)
+    if en:
+        fe = fit(en, FONT_R, 30, maxw)
+        d.text((x + 2, y + 4), en, font=fe, fill=sub)
+        y += 58
+    if lead:
+        fl = fit(lead, FONT_R, 34, maxw)
+        y += 14
+        for line in lead.split("\n"):
+            d.text((x + 2, y), line, font=fl, fill=body)
+            y += int(fl.size * 1.6)
+    return y
+
+
+def card_png(path, title, en, lead=""):
     im = Image.new("RGB", (W, H), "#111111")
     d = ImageDraw.Draw(im)
-    d.text((140, 330), title, font=font(FONT_B, 92 if len(title) <= 16 else 68), fill="#f0efec")
-    d.text((144, 470), sub, font=font(FONT_R, 40), fill="#7fb2ee")
-    y = 580
-    for line in body.split("\n") if body else []:
-        d.text((144, y), line, font=font(FONT_R, 38), fill="#c3c2b7")
-        y += 62
+    head(d, title, en, lead, 140, 280, W - 280, ts=76)
     im.save(path)
 
 
-def why_png(path, title, items):
-    """「なぜ取り組むか」の 1 枚。items は (日本語, 英語) の並び。"""
+def why_png(path, title, en, items):
+    """「なぜ取り組むか」の 1 枚。タイトルが結論、items は (日本語, 英語) の詳細。"""
     im = Image.new("RGB", (W, H), "#111111")
     d = ImageDraw.Draw(im)
-    d.text((140, 170), title, font=font(FONT_B, 64), fill="#f0efec")
-    y = 330
-    for k, (ja, en) in enumerate(items):
+    y = head(d, title, en, "", 140, 150, W - 280, ts=60) + 70
+    for k, (ja, en2) in enumerate(items):
         d.text((140, y), "●", font=font(FONT_B, 36), fill="#eb6834" if k == len(items) - 1 else "#7fb2ee")
-        d.text((200, y - 4), ja, font=font(FONT_B, 42), fill="#f0efec")
-        d.text((200, y + 60), en, font=font(FONT_R, 28), fill="#a9a8a0")
+        d.text((200, y - 4), ja, font=fit(ja, FONT_B, 42, W - 340), fill="#f0efec")
+        d.text((200, y + 60), en2, font=font(FONT_R, 28), fill="#a9a8a0")
         y += 170
     im.save(path)
 
 
-def system_png(path, title, boxes, branch):
+def system_png(path, title, en, boxes, branch):
     """しくみの全体図。boxes は左から右へ並ぶ (見出し, 説明) の箱、branch は判定の下に出る失敗時の流れ。"""
     im = Image.new("RGB", (W, H), "#111111")
     d = ImageDraw.Draw(im)
-    d.text((120, 110), title, font=font(FONT_B, 56), fill="#f0efec")
-    n, bw, gap, y0, bh = len(boxes), 300, 60, 330, 220
+    head(d, title, en, "", 120, 110, W - 240, ts=56)
+    n, bw, gap, y0, bh = len(boxes), 300, 60, 360, 220
     x0 = (W - (n * bw + (n - 1) * gap)) // 2
     centers = []
-    for k, (head, body) in enumerate(boxes):
+    for k, (hd, body) in enumerate(boxes):
         x = x0 + k * (bw + gap)
         d.rounded_rectangle([x, y0, x + bw, y0 + bh], radius=18, outline="#7fb2ee", width=4, fill="#1b2430")
-        d.text((x + 24, y0 + 24), head, font=font(FONT_B, 36), fill="#f0efec")
+        d.text((x + 24, y0 + 24), hd, font=font(FONT_B, 36), fill="#f0efec")
         yy = y0 + 84
         for line in body.split("\n"):
             d.text((x + 24, yy), line, font=font(FONT_R, 26), fill="#c3c2b7")
@@ -170,15 +191,13 @@ def wilson(k, n, z=1.96):
     return c - h, c + h
 
 
-def bars_png(path, title, bars, note="", big=""):
-    """成功率の棒グラフ(95% 信頼区間つき)を動画の画面全体の大きさで描く。字幕の分、下を空ける。"""
+def bars_png(path, title, en, lead, bars):
+    """成功率の棒グラフ(95% 信頼区間つき)のスライド。タイトルが結論、リード文が詳細。"""
     fig = plt.figure(figsize=(W / 100, H / 100), dpi=100, facecolor=SURFACE)
-    fig.text(0.06, 0.90, title, fontsize=34, color=INK, va="center")
-    if note:
-        fig.text(0.06, 0.84, note, fontsize=20, color=INK2, va="center")
-    if big:
-        fig.text(0.86, 0.875, big, fontsize=58, color=BLUE, ha="right", va="center", weight="bold")
-    ax = fig.add_axes([0.10, 0.38, 0.82, 0.40], facecolor=SURFACE)
+    fig.text(0.06, 0.925, title, fontsize=36, color=INK, va="center", weight="bold")
+    fig.text(0.061, 0.872, en, fontsize=19, color=BLUE, va="center")
+    fig.text(0.061, 0.835, lead, fontsize=21, color=INK2, va="top", linespacing=1.6)
+    ax = fig.add_axes([0.10, 0.20, 0.82, 0.47], facecolor=SURFACE)
     for x, (label, k, n, col) in enumerate(bars):
         p = k / n
         lo, hi = wilson(k, n)
@@ -196,16 +215,16 @@ def bars_png(path, title, bars, note="", big=""):
     plt.close(fig)
 
 
-def image_card_png(path, img, title):
-    """説明資料の図を、見出し付きで画面に収める(下は字幕のために空ける)。"""
+def image_card_png(path, img, title, en, lead):
+    """説明資料の図のスライド。タイトルが結論、リード文が詳細。"""
     im = Image.new("RGB", (W, H), SURFACE)
     d = ImageDraw.Draw(im)
-    d.text((115, 50), title, font=font(FONT_B, 46), fill=INK)
+    y = head(d, title, en, lead, 115, 40, W - 230, ts=50, ink=INK, sub=BLUE, body=INK2)
     fig = Image.open(img).convert("RGB")
-    box_w, box_h = W - 160, 720
+    box_w, box_h = W - 160, H - y - 30
     s = min(box_w / fig.width, box_h / fig.height)
     fig = fig.resize((int(fig.width * s), int(fig.height * s)), Image.LANCZOS)
-    im.paste(fig, ((W - fig.width) // 2, 130))
+    im.paste(fig, ((W - fig.width) // 2, y + 10))
     im.save(path)
 
 
@@ -223,7 +242,7 @@ def S(name, **kw):
 # 字幕は (場面の中での開始秒, 終了秒, 日本語, 英語, 話し手)
 SCENES = [
     S("compare", pair=(ph("E_async.mp4", 8.0, 27.0), ph("E_sync.mp4", 8.4, 27.4)), crop="900:560:950:380", pair_y=200,
-      counter=1.8, chapter="謎: 掴めない",
+      counter=1.8, chapter="実行の仕方だけを変えて比べる",
       labels=(("標準の実行(非同期)", "Standard async execution"), ("止まって考える実行", "Stop-and-think execution")), caps=[
         (0, 5.5, "同じモデル・同じ置き場所。違うのは、行動の実行の仕方だけ",
          "Same fine-tuned π0.5, same placement — only the way actions are executed differs", None),
@@ -232,39 +251,35 @@ SCENES = [
         (12.5, 19, "右は 1 回目で箱へ。左は 60 秒たっても掴めなかった。なぜか?",
          "Right: in the box on the first try. Left: still nothing after 60 s. Why?", None),
     ]),
-    S("title", card=("VLA はなぜ掴めないのか", "Why couldn't my VLA grasp? — tracking down the causes on a real SO-101",
-                     "自前データで π0.5 を学習させ、原因を一つずつ切り分けて、言葉で頼める片付けロボットにした"), dur=4),
-    S("why", why=("なぜ取り組むか", [
-        ("クラウドの GPU で VLA を動かすと、観測から行動まで約 1 秒遅れる", "Running a VLA on a cloud GPU adds ~1 s between observation and action"),
-        ("学習は順調でも、実機では「すぐ上まで行って掴めない」が起きる", "Training looks fine, yet the real robot hovers and misses"),
-        ("原因を切り分けて直し、失敗したら理由を説明して人に頼めるようにする", "Find and fix the cause; when it still fails, explain why and ask a human"),
+    S("title", card=("VLA が掴めない原因を切り分け、\n言葉で頼める片付けロボットにした",
+                     "Why couldn't my VLA grasp? Tracking down the causes on a real SO-101",
+                     "自前データで π0.5 を学習。原因は「行動の実行の仕方」と「手本に無い状況」だった"), dur=5),
+    S("why", why=("クラウドで動かす VLA は約 1 秒遅れ、実機では掴み損ねる",
+                  "A cloud-hosted VLA lags ~1 s behind, and the real arm misses the grasp", [
+        ("観測から行動まで、推論の往復に約 1 秒。そのあいだもアームは動いている", "~1 s round trip from observation to action, while the arm keeps moving"),
+        ("学習は順調でも、実機では「すぐ横まで行って掴めない」が起きる", "Training looks fine, yet the real robot hovers and misses"),
+        ("原因を切り分けて直す。それでも失敗したら理由を説明して人に頼む", "Find and fix the cause; when it still fails, explain why and ask a human"),
     ]), dur=6),
-    S("system", system=("しくみ", [
+    S("system", system=("言葉で頼むと、Claude が段取りを決め、π0.5 が動かす",
+                        "Ask in words: Claude plans the order, π0.5 moves the arm", [
         ("言葉で頼む", "「紫以外を\n片付けて」"), ("段取り", "Claude が俯瞰の\n画像を見て色の\n順番を決める"),
         ("動かす", "π0.5(自前データで\n学習)を H200 で\n推論、止まって考える"), ("判定", "俯瞰カメラで\n箱の中に 1 秒\n止まったら成功")],
         ("Claude が失敗の理由を説明 → やり直し(3 回まで)→ 人を呼ぶ", "人はリーダーアームで引き取る(操作は学習データとして保存)")), dur=6),
-    S("diagnose", image=("fig_horizon.png", "原因: 予測の何ステップ先ほど外れるか"), dur=12, chapter="原因", caps=[
-        (0, 6, "人の操作と比べると、予測(action chunk)は先のステップほど外れる(誤差 3.3 → 13.1)",
-         "Against human teleoperation, the action chunk drifts further out (error 3.3 → 13.1)", None),
-        (6, 12, "推論の往復に約 1 秒。その間に、外れやすい予測の後半を実行していた(最有力の原因)",
-         "With a ~1 s round trip, the robot executed the least accurate tail of each chunk (most likely cause)", None),
-    ]),
-    S("fix", bars=("解決: 止まって考える実行", "同じモデル・同じ晩・決めた 15 配置(5 か所 × 3 色)", [
-        ("標準の実行(非同期)", 5, 15, MUTED), ("止まって考える実行", 12, 15, BLUE)]),
-      big="33% → 80%", dur=10, chapter="解決", caps=[
-        (0, 5, "先頭の 15 ステップ(0.5 秒)だけ動かして止まり、最新の画像で予測し直す",
-         "Run only the first 15 steps (0.5 s), stop, and re-predict from a fresh image", None),
-        (5, 10, "変えたのは実行の仕方だけ。15 配置中 5 → 12 で成功",
-         "Only the execution changed: 5 → 12 of 15 placements succeed", None),
-    ]),
-    S("data", bars=("データの穴: 1 個入ると、次が動かない", "箱に入った状態から始まる手本: 144 本中 0 本", [
-        ("R0\n手本 144 本", 8, 15, BLUE), ("R1\n+箱に入った状態・\nすき間 45 本", 10, 15, BLUE)]),
-      big="53% → 67%", dur=10, chapter="データの穴", caps=[
-        (0, 5, "1 個目が箱に入ると、2 個目に取りかからず止まった。その状態の手本が 1 本も無かった",
-         "After the first cube was in the box, it froze: no demo ever started from that state", None),
-        (5, 10, "その状態の手本を 45 本足すと、止まらずに動くようになった",
-         "Adding 45 such demos got it moving again", None),
-    ]),
+    S("diagnose", image=("fig_horizon.png", "予測は先のステップほど外れ、遅れのあいだにその後半を実行していた",
+                         "The action chunk drifts further out — and the ~1 s lag meant executing its least accurate tail",
+                         "人の操作と比べると、予測(action chunk)の誤差は 3.3 → 13.1 と、先のステップほど大きい\n"
+                         "推論の往復に約 1 秒かかるので、届いたときには予測の後半を実行していた(最有力の原因)"), dur=12),
+    S("fix", bars=("止まって考える実行にすると、成功率は 33% → 80%",
+                   "Stop-and-think execution: 33% → 80% with the same model",
+                   "先頭の 15 ステップ(0.5 秒)だけ動かして止まり、最新の画像で予測し直す\n"
+                   "同じモデル・同じ晩・決めた 15 配置(5 か所 × 3 色)で、実行の仕方だけを変えて比べた", [
+        ("標準の実行(非同期)", 5, 15, MUTED), ("止まって考える実行", 12, 15, BLUE)]), dur=10),
+    S("data", bars=("箱に 1 個入った後の手本を足すと、止まらずに次を掴みにいった",
+                    "Adding demos that start with a cube already in the box: 53% → 67%",
+                    "最初の手本 144 本には、箱にキューブが入った状態から始まるものが 1 本も無かった\n"
+                    "そのため 1 個目を箱に入れると、次のキューブに取りかからず止まっていた\n"
+                    "その状態と、キューブどうしのすき間の手本を 45 本足して学習し直した", [
+        ("最初の手本 144 本", 8, 15, MUTED), ("+ 箱に入った状態・\nすき間の手本 45 本", 10, 15, BLUE)]), dur=10),
     S("hook", clip=ph("A_except_purple.mp4", 6.0, 17.0), chapter="言葉で頼む", caps=[
         (0, 1.3, "指示「紫以外を片付けて」", "Instruction: \"Tidy up everything except purple\"", None),
         (1.3, 6.2, "紫以外の、赤と黄色のキューブを箱に入れますね。", "\"I'll put the red and yellow cubes in the box.\"", "ロボット"),
@@ -279,38 +294,37 @@ SCENES = [
         (6.0, 10.0, "すみません、緑のものは見当たらないので入れられません。", "\"Sorry, I don't see anything green, so I can't put it in.\"", "ロボット"),
         (10.0, 11.8, "机の上を見て、できないことは断る", "It checks the table and declines what it can't do", None),
     ]),
-    S("explain", clip=ph("D_red_only_human.mp4", 72.0, 80.0), chapter="失敗したら", caps=[
+    S("explain", clip=ph("D_red_only_human.mp4", 72.0, 80.0), chapter="失敗したら人を呼ぶ", caps=[
         (0, 8, "「赤だけ入れて」。苦手な置き場所(真ん中)では、すぐ横まで行って掴めない",
          "\"Put only the red one in.\" At a hard placement it gets right next to the cube and misses", None),
     ]),
-    S("explain2", clip=ph("D_red_only_human.mp4", 85.8, 94.0), chapter="失敗したら", caps=[
+    S("explain2", clip=ph("D_red_only_human.mp4", 85.8, 94.0), chapter="失敗したら人を呼ぶ", caps=[
         (0, 8.2, "赤のすぐ横まで行けましたが、掴めませんでした。もう一度やってみます。",
          "\"I got right next to the red cube but couldn't grasp it. I'll try again.\"", "ロボット"),
     ], tag=("失敗の理由は Claude が試行中の画像から判断", "Claude explains the failure from frames of the attempt")),
-    S("call", clip=ph("D_red_only_human.mp4", 219.6, 229.8), chapter="失敗したら", caps=[
+    S("call", clip=ph("D_red_only_human.mp4", 219.6, 229.8), chapter="失敗したら人を呼ぶ", caps=[
         (0, 1.6, "(2 回目・3 回目も同じ失敗。省略)", "(Attempts 2 and 3 fail the same way — skipped)", None),
         (1.6, 10.2, "…掴めませんでした。うまく掴めません。リーダーアームで手伝ってください。",
          "\"...couldn't grasp it. I can't get it. Please help me with the leader arm.\"", "ロボット"),
     ]),
-    S("assist", clip=ph("D_red_only_human.mp4", 229.8, 279.5, 4.0), tag=("4× 速送り", "4× speed"), chapter="失敗したら", caps=[
+    S("assist", clip=ph("D_red_only_human.mp4", 229.8, 279.5, 4.0), tag=("4× 速送り", "4× speed"), chapter="失敗したら人を呼ぶ", caps=[
         (0, 12.5, "人がリーダーアームで引き取る。その操作は、そのまま学習データとして保存する",
          "A human takes over with the leader arm; the assist is saved as training data", None),
     ]),
-    S("done", clip=ph("D_red_only_human.mp4", 279.5, 284.5), chapter="失敗したら", caps=[
+    S("done", clip=ph("D_red_only_human.mp4", 279.5, 284.5), chapter="失敗したら人を呼ぶ", caps=[
         (0, 2.6, "箱に入ったことをカメラで確かめて、次へ", "The camera confirms the cube is in the box", None),
         (2.6, 5, "終わりました。", "\"Done.\"", "ロボット"),
     ]),
-    S("relearn", bars=("学び直し: 人の手助けを学習に戻す", "同じ 15 配置。R1 から同じだけ(4,000 step)学習を足して比べた", [
-        ("R1", 10, 15, MUTED), ("対照\nR1 のまま\n学習だけ延長", 10, 15, ORANGE), ("R2\n+人の手助け\n11 区間", 12, 15, BLUE),
-        ("R3\n+人の手助け\n8 区間", 12, 15, BLUE)]), big="67% → 80%", dur=10, chapter="学び直し", caps=[
-        (0, 5, "人が引き取った操作を学習に戻すと 67% → 80%。学習を延ばしただけ(対照)は 67% のまま",
-         "With the human assists added: 67% → 80%. Training longer without them (control): still 67%", None),
-        (5, 10, "ただし差は 15 試行中 2 回。言い切るには試行を増やす必要がある",
-         "But the gap is 2 of 15 trials — more trials are needed to be sure", None),
-    ]),
+    S("relearn", bars=("人が引き取った操作を学習に戻すと、67% → 80%",
+                       "Training on the human takeovers: 67% → 80%. Training longer alone: still 67%",
+                       "ロボットが失敗した場面だけ人がリーダーアームで引き取り、その操作を学習データに足した\n"
+                       "データを足さずに、学習を同じだけ(+4,000 step)延ばしただけでは 67% のまま\n"
+                       "ただし差は 15 試行中 2 回。言い切るには試行を増やす必要がある", [
+        ("前のモデル", 10, 15, MUTED), ("学習を延ばしただけ\n(データは同じ)", 10, 15, ORANGE),
+        ("人が引き取った操作を\n足して学習", 12, 15, BLUE)]), dur=10),
     S("end", card=("github.com/142291/pai-final-vla-tidybot", "コード・試行ごとの評価記録・説明資料(PDF)を公開 / Code, per-trial logs and the report",
                    "実行の仕方を変えるだけで 33% → 80%(同じモデル・同じ晩・同じ 15 配置)\n"
-                   "人の手助けを学習に戻すと 67% → 80%(学習を延ばしただけの対照は 67%)\n"
+                   "人が引き取った操作を学習に戻すと 67% → 80%(学習を延ばしただけでは 67%)\n"
                    "通し動作「片付けて」: 自力で 15/24、残りは人を呼んで 24/24\n"
                    "限界: 1 色 20〜45 秒と遅い / 学習に無い物は未検証 / 1 台・評価者 1 人・各 15 試行"), dur=7),
 ]
@@ -464,13 +478,13 @@ def render(sc, i):
         if "card" in sc:
             card_png(png, *sc["card"])
         elif "bars" in sc:
-            bars_png(png, sc["bars"][0], sc["bars"][2], sc["bars"][1], sc.get("big", ""))
+            bars_png(png, *sc["bars"])
         elif "why" in sc:
             why_png(png, *sc["why"])
         elif "system" in sc:
             system_png(png, *sc["system"])
         elif "image" in sc:
-            image_card_png(png, os.path.join(FIG, sc["image"][0]), sc["image"][1])
+            image_card_png(png, os.path.join(FIG, sc["image"][0]), *sc["image"][1:])
         dur = sc["dur"]
         vf = f"[0:v]fps={FPS},format=yuv420p,setsar=1[base]"
         render_with_overlays(["-loop", "1", "-t", str(dur), "-i", png] + silent(), vf, dur, ovs, out, ["-map", "1:a"])
