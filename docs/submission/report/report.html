@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>VLAはなぜ掴めないのか</title>
+<style>
+/* A4 縦の説明資料。本文 10.5pt、図は版面いっぱい。Chrome の印刷(--print-to-pdf)で PDF にする */
+:root { --ink: #16191c; --ink2: #4b5157; --muted: #80868c; --rule: #d9dcdb; --accent: #2a78d6; --accent2: #eb6834; --soft: #f2f5f8; }
+@page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; color: var(--ink); background: #fff; font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP", sans-serif; font-size: 10.2pt; line-height: 1.72; }
+h1 { font-size: 21pt; line-height: 1.3; margin: 0 0 4pt; letter-spacing: .01em; }
+h2 { font-size: 13.5pt; margin: 18pt 0 6pt; padding-bottom: 3pt; border-bottom: 1.5pt solid var(--ink); break-after: avoid; }
+h3 { font-size: 11pt; margin: 12pt 0 4pt; break-after: avoid; }
+p { margin: 0 0 6pt; }
+.sub { color: var(--ink2); font-size: 11pt; margin-bottom: 10pt; }
+.meta { font-size: 8.6pt; color: var(--muted); margin-bottom: 12pt; }
+.lead { background: var(--soft); padding: 9pt 12pt; border-radius: 4pt; margin: 8pt 0 10pt; }
+.lead p:last-child { margin: 0; }
+.nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8pt; margin: 8pt 0 12pt; }
+.num { border: 1pt solid var(--rule); border-radius: 4pt; padding: 7pt 9pt; }
+.num b { display: block; font-size: 17pt; line-height: 1.2; color: var(--accent); font-variant-numeric: tabular-nums; }
+.num span { font-size: 8.6pt; color: var(--ink2); line-height: 1.45; display: block; }
+figure { margin: 8pt 0 10pt; break-inside: avoid; }
+figure img { width: 100%; display: block; border: .5pt solid var(--rule); }
+figcaption { font-size: 8.6pt; color: var(--ink2); margin-top: 3pt; line-height: 1.5; }
+table { width: 100%; border-collapse: collapse; font-size: 8.8pt; margin: 6pt 0 10pt; break-inside: avoid; }
+th, td { border-top: .5pt solid var(--rule); padding: 3.5pt 5pt; text-align: left; vertical-align: top; line-height: 1.5; }
+th { font-weight: 600; color: var(--ink2); border-top: 1pt solid var(--ink); background: #fafbfb; }
+td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hl { color: var(--accent); font-weight: 700; }
+.warn { color: var(--accent2); font-weight: 700; }
+.flow { font-family: "SFMono-Regular", Menlo, monospace; font-size: 8.4pt; line-height: 1.5; background: #fafbfb; border: .5pt solid var(--rule); padding: 8pt 10pt; white-space: pre; break-inside: avoid; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt; }
+.small { font-size: 8.8pt; color: var(--ink2); }
+.pb { break-before: page; }
+ul, ol { margin: 0 0 6pt; padding-left: 1.3em; }
+li { margin-bottom: 2pt; }
+code { font-family: "SFMono-Regular", Menlo, monospace; font-size: 8.6pt; background: #f2f3f3; padding: 0 2pt; border-radius: 2pt; }
+</style>
+</head>
+<body>
+
+<h1>VLA はなぜ掴めないのか</h1>
+<div class="sub">実機 SO-101 で原因を一つずつ突き止め、言葉で頼める片付けロボットにした記録</div>
+<div class="meta">Physical AI 講座 2026 応用編1 最終課題 ・ 動画: (公開後に追記) ・ コード: https://github.com/142291/pai-final-vla-tidybot</div>
+
+<div class="lead">
+<p>自分で録画した手本で π0.5 をファインチューンし、机の上の 3 色のキューブを箱へ片付けさせた。学習は順調に見えたのに、実機では<b>キューブのすぐ上まで行って掴めない</b>。この「なぜ」を、記録したデータと対照実験で一つずつ切り分けた。</p>
+<p>見つかった原因は 3 つ。<b>① 推論の遅延の間に、外れやすい予測の後半を実行していた</b>、<b>② 学習データに無い状況(箱にキューブが入った状態)では動かない</b>、<b>③ 学習が足りていなかった</b>。逆に、<b>人の手助けを学習に戻す効果は、対照実験では確認できなかった</b>。最後に、言葉の指示(Claude)、成否の判定、やり直し、失敗の説明、人への引き継ぎをつないで、「片付けて」と頼めるロボットにした。</p>
+</div>
+
+<div class="nums">
+  <div class="num"><b>33% → 87%</b><span>同じモデル・同じ 15 か所で、実行の仕方だけを変えた成功率(標準の非同期 → 止まって考える。後者は 2 晩 30 試行)</span></div>
+  <div class="num"><b>53% → 93%</b><span>同じ 15 か所での成功率。データの穴を埋め、学習を十分にした結果(最初のモデル → 最良のモデル)</span></div>
+  <div class="num"><b>24 / 24</b><span>通し動作「片付けて」で最終的に箱へ入った色の数(人の手助け込み)。人の手を借りずに入ったのは 15/24</span></div>
+</div>
+
+<h2>1. 作ったもの</h2>
+<p>机の上の赤・黄・紫のキューブを、言葉の指示で箱へ片付ける実機ロボット。System 2 / System 1 の 2 段構えにした。</p>
+<div class="flow">「紫以外を片付けて」 ─▶ 段取り(Claude が俯瞰画像を見て色の順番を決める。無い色・できない指示は断る)
+                                           │ 1 色ずつ
+                                           ▼
+        π0.5(自前データでファインチューン。H200 で推論、Mac でアームを動かす。止まって考える実行)
+                                           │
+        俯瞰カメラで判定(箱の中で 1 秒止まったら成功) ── 成功 ─▶ ホームへ戻って次の色
+                                           │ 失敗
+        何が起きたかを Claude が画像で説明して読み上げ ─▶ ホームへ戻ってやり直し(最大 3 回)
+                                           │ 3 回とも失敗
+        声で人を呼ぶ ─▶ 人がリーダーアームで引き取る(その動きは学習データとして保存)</div>
+
+<table>
+<tr><th style="width:28%">講座のサンプル</th><th>この作品で加えたこと</th></tr>
+<tr><td>SO-101 入門(テレオペ・録画・学習)</td><td>3 照明 × 3 色の録画手順、1 本ずつの監査ツール、置き場所の偏りの分析、π0.5 のファインチューン(H200)、置き場所を画面に示して毎回同じ配置で比べる評価ツール</td></tr>
+<tr><td>自然言語でロボット操作</td><td>言葉 → 色の列(構造化出力で検証)→ 学習済みの指示文、の 2 段構え。画像で卓上の状態を確かめ、無い色や箱の中の色は除く</td></tr>
+<tr><td>VLM でロボットを動かす</td><td>成否の判定(キューブは色検出、それ以外は Claude)、失敗の説明、やり直しと人への引き継ぎ</td></tr>
+<tr><td>(サンプルに無い)</td><td>遅延の原因を「予測と人の操作の比較」で突き止め、止まって考える実行で解決。データの穴と学習不足を対照実験で切り分け</td></tr>
+</table>
+
+<h2>2. 実機とデータ</h2>
+<div class="two">
+<div>
+<ul>
+<li><b>アーム</b>: SO-101(フォロワー + リーダー)。カメラは俯瞰と手首の 2 台(640×360、30fps)。</li>
+<li><b>計算</b>: アームの制御は Mac、学習と推論はクラウドの H200。観測を JPEG にして送り、行動のまとまり(50 ステップ)を受け取る。観測から行動が届くまで約 0.9〜1.3 秒。</li>
+<li><b>方策</b>: π0.5(PaliGemma ベースの VLA)を自前データでファインチューン。比較用に SmolVLA と ACT も同じデータで学習。</li>
+</ul>
+</div>
+<div>
+<ul>
+<li><b>手本</b>: 3 色 × 50 本 × 照明 3 条件(朝・昼・夜)の 150 本を、リーダーアームで録画。全本を目視で確認して 144 本を学習に使用。</li>
+<li><b>追加</b>: 評価で見つけたすき間(アームの真下の中央、手前の端)と、「箱に他の色が入った状態から」の手本 45 本。置き場所を画面の丸と声で案内する録画ツールで撮った。</li>
+<li><b>評価</b>: 3 色 × 5 か所 = 15 試行。順序は固定。試行の前に俯瞰映像へ置き場所の丸を出し、毎回同じ配置で比べる。成功率には Wilson の 95% 信頼区間を付ける。</li>
+</ul>
+</div>
+</div>
+
+<h2>3. 謎 1: すぐ上まで行くのに掴めない</h2>
+<p>最初のモデルは 15 試行で 6 回(40%)しか成功しなかった。失敗はほとんどが「キューブのすぐ上まで来て、少しずれた所で掴もうとし続ける」型だった。手でキューブを顎の間に置いてやれば掴める。</p>
+<h3>測ったこと: 予測は先のステップほど外れる</h3>
+<p>学習に使っていない 4 本の手本で、モデルの予測と人の実際の操作を比べた。行動のまとまり(50 ステップ = 1.7 秒分)の先頭 0〜5 ステップ目の誤差は 3.3 だが、35〜50 ステップ目は 13.1。学習データ上ではどこも 1.5〜2.4 で平らなので、未知の場面では「先の予測ほど当てにならない」。SmolVLA・ACT でも同じ傾向だった。</p>
+<figure><img src="../figures/fig_horizon.png" alt="予測の先のステップほど人の操作との誤差が大きくなる折れ線グラフ"><figcaption>図 1. 予測の何ステップ先かと、人の操作との誤差(学習に使っていない 4 本、動いている区間)。網掛けは止まって考える実行で使う範囲。</figcaption></figure>
+<h3>原因: 遅延の間に、外れやすい後半を実行していた</h3>
+<p>観測から行動が届くまでに約 1 秒(30 ステップ分)かかる。標準の非同期実行は、届いた時点で過ぎてしまった前半を飛ばし、<b>外れやすい後半</b>を実行していた。さらに古いまとまりと新しいまとまりを混ぜていた。土台を大きく回す横の位置ほど、この 1 秒のずれが効く。</p>
+<h3>対策: 止まって考える実行</h3>
+<p>まとまりの先頭 15 ステップ(0.5 秒)だけを実行して止まり、<b>止まった後の画像</b>で次のまとまりを予測させる。止まった時刻より前の観測にもとづくまとまりは捨てる。動きは途切れるが、常に予測のいちばん正確な部分だけを使う。LeRobot の非同期推論のクライアントを継承して実装した(<code>scripts/remote/fast_client.py</code>)。</p>
+<table>
+<tr><th>同じモデル(最良)・同じ 15 か所</th><th>成功</th><th>メモ</th></tr>
+<tr><td>標準の非同期実行</td><td class="n">5/15 = 33% [15–58%]</td><td>10/31 夜</td></tr>
+<tr><td>止まって考える実行(先頭 15 ステップ)</td><td class="n hl">12/15 = 80% [55–93%]</td><td>10/31 夜(非同期と同じ晩)。同じ晩どうしで、止まって考えるだけ成功 9、非同期だけ成功 2</td></tr>
+<tr><td>止まって考える実行(別の晩)</td><td class="n hl">14/15 = 93% [70–99%]</td><td>10/28 夜。2 晩を合わせると 26/30 = 87% で、非同期との差は Fisher の正確検定で p &lt; 0.001</td></tr>
+</table>
+
+<h2>4. 謎 2: 1 個入ると、次が動かない</h2>
+<p>「片付けて」で通して動かすと、1 個目が箱に入った後、2 個目に取りかからずその場で止まった。学習データ 144 本を調べると、<b>箱にキューブが入った状態から始まる手本は 0 本</b>だった。実際に止まった場面の観測(画像と関節角)を記録から取り出し、モデルに見せて「どれだけ動こうとするか」を測った(<code>scripts/remote/replay_probe.py</code>)。</p>
+<table>
+<tr><th>記録した場面</th><th>最初のモデル</th><th>「箱に入った状態から」の手本 45 本を足したモデル</th></tr>
+<tr><td>赤が箱の中、黄を指示(実機で止まった場面)</td><td class="n">1.6(動かない)</td><td class="n hl">120.8</td></tr>
+<tr><td>同上、別の場面</td><td class="n">1.5(動かない)</td><td class="n hl">106.4</td></tr>
+<tr><td>箱が空、赤を指示(実機で動いた場面)</td><td class="n">106.1</td><td class="n">110.9</td></tr>
+</table>
+<p class="small">値は、予測した 50 ステップの中で今の姿勢から最も離れる量(3 回の平均)。足りない状況の手本を足すと、その状況で動くようになることが、実機を動かさずに確かめられた。</p>
+
+<h2>5. 学び直しは本当に効いたのか(対照実験)</h2>
+<p>データを足して学び直すたびに、同じ 15 か所での成功率は 53% → 67% → 80% と上がった。人が通し動作で手伝った区間(リーダーアームで引き取った動き)を学習に戻したのがラウンド 2 と 3。ところが、<b>ラウンド 1 のデータのまま学習を同じだけ延ばした対照モデル</b>が 93% で最も高かった。</p>
+<figure><img src="../figures/fig_progress.png" alt="実行方式、ラウンドごと、通し動作の自律化率の成功率の棒グラフ"><figcaption>図 2. 左: 実行の仕方だけを変えた比較(最良のモデル、同じ 15 か所)。中: 同じ 15 か所での成功率。オレンジが対照。右: 通し動作で人の手を借りずに箱へ入った割合。縦線は 95% 信頼区間。</figcaption></figure>
+<table>
+<tr><th>モデル</th><th>学習データ</th><th>追加の学習</th><th>成功</th></tr>
+<tr><td>ラウンド 0</td><td>手本 144 本</td><td>20,000 step</td><td class="n">8/15 = 53%</td></tr>
+<tr><td>ラウンド 1</td><td>+ すき間・箱に入った状態から 45 本</td><td>+6,000</td><td class="n">10/15 = 67%</td></tr>
+<tr><td>ラウンド 2</td><td>+ 人の手助け 11 区間 ×3</td><td>+4,000</td><td class="n">12/15 = 80%</td></tr>
+<tr><td>ラウンド 3</td><td>+ 人の手助け 8 区間 ×3</td><td>+4,000</td><td class="n">12/15 = 80%</td></tr>
+<tr><td><b>対照</b></td><td>ラウンド 1 と同じ(手助けなし)</td><td>+4,000</td><td class="n hl">14/15 = 93%</td></tr>
+</table>
+<ul>
+<li><b>人の手助けデータの効果は確認できなかった。</b>ラウンド 1 → 2 の伸びは、学習を延ばした効果で説明できる。手助けの区間は失敗した途中の姿勢から始まり、急な動きや止まった時間を含み、量も 2.7 分と少なかった。3 倍の重みで偏らせた可能性がある。</li>
+<li><b>15 試行の比較は揺れが大きい。</b>ラウンド 2 と 3 は成功数が同じなのに、失敗した配置が 3 つとも入れ替わった。配置 1 つを取り出して「直った」とは言わない。</li>
+<li>確かに言えるのは、<b>足りない状況のデータを足すと、その状況で動くようになる</b>(4 章)ことと、<b>学習が足りないと伸びない</b>こと。</li>
+</ul>
+
+<h2>6. 「片付けて」と頼めるようにする</h2>
+<h3>段取り(System 2)</h3>
+<p>Claude に俯瞰画像と指示を渡し、構造化出力で色の列を返させる。π0.5 には学習時とまったく同じ英語の指示文だけを渡す。Claude が使えないときはキーワードのルールに切り替える。</p>
+<table>
+<tr><th>指示</th><th>段取り</th><th>ロボットの返事</th></tr>
+<tr><td>片付けて</td><td>赤 → 紫 → 黄</td><td>箱に近い順に片付けます</td></tr>
+<tr><td>紫以外を片付けて</td><td>赤 → 黄</td><td>赤と黄色を箱に入れますね</td></tr>
+<tr><td>信号の色のものだけ箱に入れて</td><td>赤 → 黄</td><td>信号の色の赤と黄色を箱に入れますね</td></tr>
+<tr><td>緑のを入れて</td><td>(なし)</td><td>緑のキューブは見当たらないので入れられません</td></tr>
+</table>
+<h3>判定・やり直し・失敗の説明・人への引き継ぎ</h3>
+<ul>
+<li><b>判定</b>: 俯瞰カメラで、対象の色が箱の領域で 1 秒止まったら成功(運んでいる途中は動くので除ける)。色で見つけられない物は、Claude に画像で判定させる(記録した 4 枚で 4 枚とも正しかった)。</li>
+<li><b>失敗の説明</b>: 失敗した試行の画像 5 組を Claude に見せ、「赤のすぐ上まで来ましたが、掴めませんでした」のように一人称で読み上げる。評価の失敗 8 回を作者が録画で分類した型と比べると、型の一致は 4/8。外れた回も「押し出した後に見失った」のように隣り合う型で、説明は録画と食い違わなかった。</li>
+<li><b>人への引き継ぎ</b>: 3 回失敗すると声で人を呼ぶ。人がリーダーアームをフォロワーと同じ姿勢にして h を押すと、その場から操作を引き取れる。操作は学習データと同じ形式で保存する。</li>
+</ul>
+<h3>通し動作の結果</h3>
+<p>「片付けて」を 8 回ずつ(24 色)通した。最終的に箱へ入ったのはどちらも 24/24。人の手を借りずに入ったのは、ラウンド 1 が 13/24 = 54%、ラウンド 2 が 15/24 = 62%。人の手助けが要ったのは主に、2 色目の黄(箱に赤が入った状態から)と、手前・右の端だった。動画の撮影(10/31〜11/1)では撮り直しのために途中で止めた回が多いので、成功率には数えていない。動画に使った回は、「紫以外を片付けて」が 2 色とも自力、「片付けて」が 3 色とも自力、苦手な真ん中に置いた「赤だけ入れて」は 3 回失敗して説明 → 人を呼んで引き取り。同じ置き場所で実行の仕方だけを変えて続けて動かすと、非同期は 60 秒たっても掴めず、止まって考える実行は 16 秒で箱へ入った(動画 0:22〜)。</p>
+
+<h2>7. 開発中に見つけた問題と対策</h2>
+<table>
+<tr><th style="width:24%">問題</th><th style="width:44%">突き止め方</th><th>対策</th></tr>
+<tr><td>近くまで行くが掴めない</td><td>予測と人の操作の比較。先の予測ほど外れ、遅延の間に後半を実行していた</td><td>止まって考える実行</td></tr>
+<tr><td>制御ループが 1 周 3.5〜4.3 秒</td><td>区間ごとの計測。生画像 1.38MB を同期で送っていた</td><td>送信を裏スレッドへ、JPEG で送る(1 周 2〜4ms)</td></tr>
+<tr><td>推論が倍に遅い</td><td>GPU の使用状況。別のシミュレータ 2 つが計算を占有していた</td><td>止めて 520 → 255ms</td></tr>
+<tr><td>箱が数 cm ずれていた</td><td>学習時の画像と重ねて比較(箱だけ約 53px ずれ)</td><td>重ね合わせツールで毎回確認</td></tr>
+<tr><td>夜に箱を誤検出</td><td>学習 150 本で検出を確かめ直し、夜の 50 本すべてで誤っていた</td><td>彩度と形で床を除く</td></tr>
+<tr><td>1 個入ると次が動かない</td><td>学習データの開始時の状態を調べたら 0 本。記録した場面の再生で確認</td><td>「箱に入った状態から」の手本</td></tr>
+<tr><td>失敗が置き場所に偏る</td><td>評価の初期位置を学習データの置き場所に重ねた(3 つのかたまりに偏り)</td><td>すき間を狙った追加録画</td></tr>
+<tr><td>モデルの差と置き場所の差が混ざる</td><td>同じ晩に前のモデルも成績が落ちていた</td><td>置き場所を映像に丸で示す評価ツール</td></tr>
+<tr><td>人の手助けで伸びたように見えた</td><td>手助けを抜いて同じだけ学習した対照モデル</td><td>伸びは学習不足の解消と判明(5 章)</td></tr>
+<tr><td>手助けの判定が「入っていない」</td><td>録画を確認。手伝いの途中で俯瞰カメラにぶつかり画像が約 90px ずれていた</td><td>その区間を学習から除外</td></tr>
+<tr><td>データの結合後に読み込めない</td><td>LeRobot の結合ツールが、元データのファイル番号を目次にそのまま写していた</td><td>目次を直して結合(不具合として報告予定)</td></tr>
+</table>
+
+<h2>8. 限界と今後</h2>
+<ul>
+<li><b>試行数</b>: 1 条件 15 試行で、信頼区間が広い。15 試行の中の 1 配置ごとの成否は揺れる。</li>
+<li><b>評価者・環境</b>: 評価者は作者 1 人、1 台、1 つの机。夜の照明での評価が中心。</li>
+<li><b>速さ</b>: 止まって考える実行は 1 色 20〜45 秒。遅延の短縮や、遅延を見込んだ予測(Real-Time Chunking など)と組み合わせるのが次の課題。</li>
+<li><b>学習に無い物</b>: 自前データで微調整した π0.5 が、学習に無い物(例えば消しゴム)をどこまで扱えるかは確かめきれていない。消しゴムで 1 回試しただけで、評価と言える数は無い。段取り役は「教わっていない物」を区別して人に頼むようにしてある。</li>
+<li><b>人の手助けの学び直し</b>: 今回は効果を確認できなかった。失敗した姿勢からの区間の整え方、重み、量を変えて確かめたい(HG-DAgger などの対話的な模倣学習の考え方)。</li>
+</ul>
+
+<h2>9. 再現方法・生成 AI の利用・ライセンス</h2>
+<p class="small">セットアップ、録画、学習、評価、通し動作のコマンドはリポジトリの README にまとめた。評価の結果は <code>outputs/eval/results.csv</code>(試行ごと)と <code>docs/evaluation.md</code>(経緯)に残している。開発では Claude(Claude Code)をコードの作成、録画の分析、文書の下書きに使い、すべての判断と実機の作業は作者が行った。ロボットの段取り・判定・失敗の説明には Claude API を使う。コードは MIT ライセンス。π0.5 の重みは openpi / LeRobot の条件に従い、公開しない。</p>
+
+</body>
+</html>

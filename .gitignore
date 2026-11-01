@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+outputs/
+wandb/
+config.env
+.DS_Store
+data/
+
+# 診断用の出力(カメラ比較・照明チェック)
+framing_check/
