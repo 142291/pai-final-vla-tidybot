@@ -121,7 +121,7 @@ def bars_png(path, title, bars, note=""):
     fig.text(0.06, 0.90, title, fontsize=34, color=INK, va="center")
     if note:
         fig.text(0.06, 0.84, note, fontsize=20, color=INK2, va="center")
-    ax = fig.add_axes([0.10, 0.30, 0.82, 0.48], facecolor=SURFACE)
+    ax = fig.add_axes([0.10, 0.38, 0.82, 0.40], facecolor=SURFACE)
     for x, (label, k, n, col) in enumerate(bars):
         p = k / n
         lo, hi = wilson(k, n)
@@ -165,80 +165,79 @@ def S(name, **kw):
 
 # 字幕は (場面の中での開始秒, 終了秒, 日本語, 英語, 話し手)
 SCENES = [
-    S("hook", clip=ph("A_except_purple.mp4", 6.0, 21.6), caps=[
-        (0, 1.3, "指示「紫以外を片付けて」", "Instruction: \"Tidy up everything except purple\"", None),
-        (1.3, 6.2, "紫以外の、赤と黄色のキューブを箱に入れますね。", "\"I'll put the red and yellow cubes in the box.\"", "ロボット"),
-        (6.2, 15.6, "実機・1 倍速。自分で集めた手本で π0.5 を学習させた", "Real robot, real time. π0.5 fine-tuned on my own demonstrations", None),
-    ]),
-    S("title", card=("VLA はなぜ掴めないのか", "Why couldn't my VLA grasp? — tracking down the causes on a real SO-101",
-                     "原因を一つずつ突き止めて直し、言葉で頼める片付けロボットにした記録"), dur=4),
-    S("compare", pair=(ph("E_async.mp4", 8.0, 27.0), ph("E_sync.mp4", 8.4, 27.4)),
+    S("compare", pair=(ph("E_async.mp4", 8.0, 27.0), ph("E_sync.mp4", 8.4, 27.4)), crop="900:560:950:380", pair_y=200,
+      counter=1.8, chapter="謎: 掴めない",
       labels=(("標準の実行(非同期)", "Standard async execution"), ("止まって考える実行", "Stop-and-think execution")), caps=[
-        (0, 6.5, "同じモデル・同じ置き場所。右は実行の仕方だけを変えた",
-         "Same model, same placement — the right side changes only how actions are executed", None),
-        (6.5, 13, "左はキューブのすぐ横まで行って、止まったまま掴めない",
+        (0, 5.5, "同じモデル・同じ置き場所。違うのは、行動の実行の仕方だけ",
+         "Same fine-tuned π0.5, same placement — only the way actions are executed differs", None),
+        (5.5, 12.5, "左はキューブのすぐ横まで行って、止まったまま掴めない",
          "Left: it reaches the cube, then stalls without grasping", None),
-        (13, 19, "右は 1 回目で箱へ。左は 60 秒たっても掴めなかった。なぜか?",
+        (12.5, 19, "右は 1 回目で箱へ。左は 60 秒たっても掴めなかった。なぜか?",
          "Right: in the box on the first try. Left: still nothing after 60 s. Why?", None),
     ]),
-    S("diagnose", image=("fig_horizon.png", "切り分け: 予測の何ステップ先ほど外れるか"), dur=13, caps=[
-        (0, 6.5, "人の操作と比べると、予測は先のステップほど外れる(誤差 3.3 → 13.1)",
-         "Against human teleoperation, predictions drift further out (error 3.3 → 13.1)", None),
-        (6.5, 13, "推論の往復に約 1 秒。その間に、外れやすい予測の後半を実行していた",
-         "With a ~1 s inference round trip, the robot was executing the least accurate tail of each chunk", None),
+    S("title", card=("VLA はなぜ掴めないのか", "Why couldn't my VLA grasp? — tracking down the causes on a real SO-101",
+                     "自前データで π0.5 を学習させ、原因を一つずつ切り分けて、言葉で頼める片付けロボットにした"), dur=4),
+    S("diagnose", image=("fig_horizon.png", "原因: 予測の何ステップ先ほど外れるか"), dur=12, chapter="原因", caps=[
+        (0, 6, "人の操作と比べると、予測(action chunk)は先のステップほど外れる(誤差 3.3 → 13.1)",
+         "Against human teleoperation, the action chunk drifts further out (error 3.3 → 13.1)", None),
+        (6, 12, "推論の往復に約 1 秒。その間に、外れやすい予測の後半を実行していた(最有力の原因)",
+         "With a ~1 s round trip, the robot executed the least accurate tail of each chunk (most likely cause)", None),
     ]),
-    S("fix", bars=("解決: 止まって考える実行", "同じモデル・決めた同じ 15 か所", [
-        ("標準(非同期)\n10/31", 5, 15, MUTED), ("止まって考える\n10/28 と 10/31", 26, 30, BLUE)]), dur=10, caps=[
+    S("fix", bars=("解決: 止まって考える実行(先頭 15 ステップだけ実行する同期実行)", "同じモデル・決めた 15 配置(5 か所 × 3 色)", [
+        ("標準(非同期)\n10/31", 5, 15, MUTED), ("止まって考える\n10/31(同じ晩)", 12, 15, BLUE), ("止まって考える\n10/28", 14, 15, BLUE)]),
+      dur=10, chapter="解決", caps=[
         (0, 5, "先頭の 15 ステップ(0.5 秒)だけ動かして止まり、最新の画像で予測し直す",
-         "Stop-and-think: run only the first 15 steps (0.5 s), stop, and re-plan from a fresh image", None),
-        (5, 10, "決めた 15 か所でも 33% → 87%(Fisher の正確検定 p < 0.001)",
-         "Changing only how it executes: 33% → 87% (Fisher's exact test, p < 0.001)", None),
+         "Run only the first 15 steps (0.5 s), stop, and re-predict from a fresh image", None),
+        (5, 10, "同じ晩どうしで 33% → 80%。別の晩は 93%",
+         "Same night: 33% → 80%. Another night: 93%", None),
     ]),
-    S("data", bars=("データの穴と、対照実験", "決めた同じ 15 か所での成功率", [
+    S("data", bars=("データの穴と、対照実験", "決めた 15 配置での成功率(止まって考える実行)", [
         ("R0\n150 本", 8, 15, BLUE), ("R1\n+箱に入った\n状態 45 本", 10, 15, BLUE), ("R2\n+人の手助け", 12, 15, BLUE),
-        ("R3\n+人の手助け", 12, 15, BLUE), ("対照\nR1 のまま\n学習を延長", 14, 15, ORANGE)]), dur=12, caps=[
+        ("R3\n+人の手助け", 12, 15, BLUE), ("対照\nR1 のまま\n学習を延長", 14, 15, ORANGE)]), dur=12, chapter="データと対照実験", caps=[
         (0, 6, "箱にキューブが入った状態から始まる手本が 0 本だった → 45 本足すと、止まらずに動くように",
          "No demos started with a cube already in the box — adding 45 of them got it moving again", None),
-        (6, 12, "人の手助けを学習に戻す効果は確認できず。伸びの正体は学習不足の解消だった",
-         "Feeding human assists back showed no measurable gain — the gain came from training longer (control: 93%)", None),
+        (6, 12, "人の手助けを学習に戻す効果は確認できず。手助け無しで学習を延ばした対照が最高",
+         "Feeding human assists back showed no measurable gain; the control with longer training scored highest", None),
     ]),
-    S("tidy", clip=ph("B1_tidy_all.mp4", 8.0, 26.0), caps=[
-        (0, 0.4, "指示「片付けて」", "Instruction: \"Tidy up\"", None),
-        (0.4, 4.5, "紫、黄、赤のキューブを順に箱へ片付けます。", "\"I'll put the purple, yellow and red cubes in the box, in that order.\"", "ロボット"),
-        (4.5, 14, "段取りは Claude が俯瞰の画像を見て決める。動かすのは π0.5", "Claude plans from the overhead image; π0.5 drives the arm", None),
-        (14, 18, "俯瞰カメラで判定: 箱の中で 1 秒止まったら成功", "The overhead camera checks: cube resting in the box for 1 s = success", None),
+    S("hook", clip=ph("A_except_purple.mp4", 6.0, 17.0), chapter="言葉で頼む", caps=[
+        (0, 1.3, "指示「紫以外を片付けて」", "Instruction: \"Tidy up everything except purple\"", None),
+        (1.3, 6.2, "紫以外の、赤と黄色のキューブを箱に入れますね。", "\"I'll put the red and yellow cubes in the box.\"", "ロボット"),
+        (6.2, 11, "段取りは Claude が俯瞰の画像を見て決め、π0.5 が動かす(1 倍速)", "Claude plans from the overhead image; π0.5 moves the arm (real time)", None),
     ]),
-    S("tidy_fast", clip=ph("B1_tidy_all.mp4", 26.0, 79.0, 4.0), tag=("4× 速送り", "4× speed"), caps=[
-        (0, 13.25, "残りの 2 色も 1 回目で成功", "The other two cubes also go in on the first try", None),
+    S("tidy_fast", clip=ph("B1_tidy_all.mp4", 8.0, 79.0, 4.0), tag=("4× 速送り", "4× speed"), chapter="言葉で頼む", caps=[
+        (0, 17.75, "「片付けて」で 3 色とも 1 回目で成功した回(撮影した回の中から選んだもの)",
+         "\"Tidy up\": all three cubes on the first try (a selected take)", None),
     ]),
-    S("refuse", optional="C_green.mp4", clip=ph("C_green.mp4", 0.0, 11.8), caps=[
+    S("refuse", optional="C_green.mp4", clip=ph("C_green.mp4", 0.0, 11.8), chapter="言葉で頼む", caps=[
         (0, 6.0, "指示「緑のを入れて」(机にあるのは赤・黄・紫だけ)", "Instruction: \"Put the green one in\" (only red, yellow and purple on the table)", None),
         (6.0, 10.0, "すみません、緑のものは見当たらないので入れられません。", "\"Sorry, I don't see anything green, so I can't put it in.\"", "ロボット"),
         (10.0, 11.8, "机の上を見て、できないことは断る", "It checks the table and declines what it can't do", None),
     ]),
-    S("explain", clip=ph("D_red_only_human.mp4", 72.0, 80.0), caps=[
+    S("explain", clip=ph("D_red_only_human.mp4", 72.0, 80.0), chapter="失敗したら", caps=[
         (0, 8, "「赤だけ入れて」。苦手な置き場所(真ん中)では、すぐ横まで行って掴めない",
          "\"Put only the red one in.\" At a hard placement it gets right next to the cube and misses", None),
     ]),
-    S("explain2", clip=ph("D_red_only_human.mp4", 85.8, 94.0), caps=[
+    S("explain2", clip=ph("D_red_only_human.mp4", 85.8, 94.0), chapter="失敗したら", caps=[
         (0, 8.2, "赤のすぐ横まで行けましたが、掴めませんでした。もう一度やってみます。",
          "\"I got right next to the red cube but couldn't grasp it. I'll try again.\"", "ロボット"),
     ], tag=("失敗の理由は Claude が試行中の画像から判断", "Claude explains the failure from frames of the attempt")),
-    S("call", clip=ph("D_red_only_human.mp4", 219.6, 229.8), caps=[
+    S("call", clip=ph("D_red_only_human.mp4", 219.6, 229.8), chapter="失敗したら", caps=[
         (0, 1.6, "(2 回目・3 回目も同じ失敗。省略)", "(Attempts 2 and 3 fail the same way — skipped)", None),
         (1.6, 10.2, "…掴めませんでした。うまく掴めません。リーダーアームで手伝ってください。",
          "\"...couldn't grasp it. I can't get it. Please help me with the leader arm.\"", "ロボット"),
     ]),
-    S("assist", clip=ph("D_red_only_human.mp4", 229.8, 279.5, 4.0), tag=("4× 速送り", "4× speed"), caps=[
-        (0, 12.5, "人がリーダーアームで引き取る。その操作は学習データとして保存する", "A human takes over with the leader arm; the assist is saved as training data", None),
+    S("assist", clip=ph("D_red_only_human.mp4", 229.8, 279.5, 4.0), tag=("4× 速送り", "4× speed"), chapter="失敗したら", caps=[
+        (0, 12.5, "人がリーダーアームで引き取る。操作は学習データとして保存(学び直しへの効果は未確認)",
+         "A human takes over with the leader arm; the assist is saved as training data (benefit not confirmed)", None),
     ]),
-    S("done", clip=ph("D_red_only_human.mp4", 279.5, 284.5), caps=[
+    S("done", clip=ph("D_red_only_human.mp4", 279.5, 284.5), chapter="失敗したら", caps=[
         (0, 2.6, "箱に入ったことをカメラで確かめて、次へ", "The camera confirms the cube is in the box", None),
         (2.6, 5, "終わりました。", "\"Done.\"", "ロボット"),
     ]),
-    S("end", card=("コード・評価の記録・説明資料は GitHub で公開", "Code, evaluation logs and the report are on GitHub",
-                   "限界: 1 色 20〜45 秒と遅い / 学習に無い物は扱えない / 評価は 1 台・1 人・各 15 試行\n"
-                   "Limits: slow (20–45 s per cube), only taught objects, one robot and 15 trials per condition"), dur=6),
+    S("end", card=("github.com/142291/pai-final-vla-tidybot", "コード・試行ごとの評価記録・説明資料(PDF)を公開 / Code, per-trial logs and the report",
+                   "実行の仕方: 同じ晩・同じ 15 配置で 33% → 80%(別の晩 93%)\n"
+                   "通し動作「片付けて」: 自力で 15/24、残りは人を呼んで 24/24\n"
+                   "限界: 1 色 20〜45 秒と遅い / 学習に無い物は未検証 / 1 台・評価者 1 人・各 15 試行"), dur=7),
 ]
 
 
@@ -267,7 +266,38 @@ def overlays(sc, i):
         p = os.path.join(WORK, f"s{i:02d}_tag.png")
         tag_png(p, *sc["tag"])
         out.append((p, 0, 999))
+    if sc.get("chapter"):
+        p = os.path.join(WORK, f"s{i:02d}_chapter.png")
+        chapter_png(p, sc["chapter"])
+        out.append((p, 0, 999))
+    if sc.get("counter"):   # 左右の画面の左下に、指示からの経過秒を出す
+        t_start, dur = sc["counter"], sc["pair"][0]["b"] - sc["pair"][0]["a"]
+        k = 0
+        while k < dur:
+            sec = int(t_start + k + 1e-6)
+            nxt = min(dur, (sec + 1) - t_start)
+            p = os.path.join(WORK, f"s{i:02d}_cnt{sec:03d}.png")
+            im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            d = ImageDraw.Draw(im)
+            for x0 in (8, 968):
+                txt = f"指示から {sec} 秒"
+                d.rounded_rectangle([x0 + 14, 760, x0 + 30 + d.textlength(txt, font=font(FONT_B, 40)), 822], radius=10, fill=(0, 0, 0, 190))
+                d.text((x0 + 22, 766), txt, font=font(FONT_B, 40), fill=(255, 255, 255, 255))
+            im.save(p)
+            out.append((p, round(k, 3), round(nxt, 3)))
+            k = nxt
     return out
+
+
+def chapter_png(path, text):
+    """画面右上の章の札(いまどの話かを示す)。"""
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    f = font(FONT_B, 32)
+    w = d.textlength(text, font=f)
+    d.rounded_rectangle([W - 60 - w - 36, 40, W - 60, 96], radius=12, fill=(42, 120, 214, 220))
+    d.text((W - 60 - w - 18, 48), text, font=f, fill=(255, 255, 255, 255))
+    im.save(path)
 
 
 def render_with_overlays(base_inputs, base_filter, dur, ovs, out, audio_map):
@@ -306,18 +336,19 @@ def render(sc, i):
         render_with_overlays(["-i", os.path.join(PHONE, c["src"])], vf + ";" + af, dur, ovs, out, ["-map", "[a]"])
     elif "pair" in sc:
         (l, r), dur = sc["pair"], sc["pair"][0]["b"] - sc["pair"][0]["a"]
+        crop = f"crop={sc['crop']}," if sc.get("crop") else ""
         lab = os.path.join(WORK, f"s{i:02d}_labels.png")
         im = Image.new("RGBA", (W, H), (17, 17, 17, 255))
         d = ImageDraw.Draw(im)
         for k, (ja, en) in enumerate(sc["labels"]):
             x0 = 8 + k * 960
-            d.text((x0 + 24, 150), ja, font=font(FONT_B, 40), fill=(255, 210, 80, 255) if k else (220, 220, 215, 255))
-            d.text((x0 + 24, 202), en, font=font(FONT_R, 26), fill=(200, 200, 195, 255))
+            d.text((x0 + 24, sc.get("pair_y", 250) - 100), ja, font=font(FONT_B, 40), fill=(255, 210, 80, 255) if k else (220, 220, 215, 255))
+            d.text((x0 + 24, sc.get("pair_y", 250) - 48), en, font=font(FONT_R, 26), fill=(200, 200, 195, 255))
         im.save(lab)
         vf = (f"[2:v]format=rgba[bg];"
-              f"[0:v]trim=start={l['a']}:end={l['b']},setpts=PTS-STARTPTS,fps={FPS},scale=944:-2,tpad=stop_mode=clone:stop_duration=5[L];"
-              f"[1:v]trim=start={r['a']}:end={r['b']},setpts=PTS-STARTPTS,fps={FPS},scale=944:-2,tpad=stop_mode=clone:stop_duration=5[R];"
-              f"[bg][L]overlay=8:250[t1];[t1][R]overlay=968:250,format=yuv420p,setsar=1[base];"
+              f"[0:v]trim=start={l['a']}:end={l['b']},setpts=PTS-STARTPTS,fps={FPS},{crop}scale=944:-2,tpad=stop_mode=clone:stop_duration=5[L];"
+              f"[1:v]trim=start={r['a']}:end={r['b']},setpts=PTS-STARTPTS,fps={FPS},{crop}scale=944:-2,tpad=stop_mode=clone:stop_duration=5[R];"
+              f"[bg][L]overlay=8:{sc.get('pair_y', 250)}[t1];[t1][R]overlay=968:{sc.get('pair_y', 250)},format=yuv420p,setsar=1[base];"
               f"[1:a]atrim=start={r['a']}:end={r['b']},asetpts=PTS-STARTPTS,apad[a]")
         render_with_overlays(["-i", os.path.join(PHONE, l["src"]), "-i", os.path.join(PHONE, r["src"]),
                               "-loop", "1", "-t", f"{dur:.3f}", "-i", lab], vf, dur, ovs, out, ["-map", "[a]"])

@@ -50,14 +50,13 @@ def fig_horizon():
     ax.text(7.5, 14.6, "止まって考える実行で\n使う範囲(先頭 15 個)", ha="center", va="top", fontsize=9.5, color=INK2)
     nudge = {"ACT": 0.45, "π0.5": -0.45}   # 終点の名前が重ならないように少しずらす
     for name, col, mk, x, y in series:
-        if name == "π0.5":   # 測っていない 5–25 は点線でつなぐ
-            ax.plot(x[:2], y[:2], color=col, lw=2, ls=(0, (3, 3)), zorder=3)
+        if name == "π0.5":   # 測っていない 5–25 はつながない(点だけ)
             ax.plot(x[1:], y[1:], color=col, lw=2, zorder=3)
             ax.plot(x, y, ls="none", color=col, marker=mk, ms=8, mec=SURFACE, mew=2, label=name, zorder=4)
         else:
             ax.plot(x, y, color=col, lw=2, marker=mk, ms=8, mec=SURFACE, mew=2, label=name, zorder=3)
         ax.text(x[-1] + 1.2, y[-1] + nudge.get(name, 0), name, va="center", fontsize=10, color=INK)
-    ax.text(51.5, 0.4, "π0.5 は 5–25 ステップ目を測っていない(点線)", ha="right", va="bottom", fontsize=8.5, color=MUTED)
+    ax.text(51.5, 0.4, "π0.5 は 5–25 ステップ目を測っていない(線でつながない)", ha="right", va="bottom", fontsize=8.5, color=MUTED)
     ax.set_xlim(0, 52)
     ax.set_ylim(0, 15)
     ax.set_xticks(mids, ["0–5", "5–15", "15–25", "25–35", "35–50"])
@@ -72,13 +71,13 @@ def fig_horizon():
 
 def fig_progress():
     panels = [
-        ("① 実行の仕方(同じモデル・同じ 15 か所)", [("非同期\n10/31", 5, 15), ("止まって考える\n10/31", 12, 15), ("止まって考える\n10/28", 14, 15)]),
-        ("② 同じ 15 配置での成功率", [("R0\n150 本", 8, 15), ("R1\n+すき間\n45 本", 10, 15),
+        ("① 実行の仕方(同じモデル・同じ 15 配置)", [("非同期\n10/31", 5, 15), ("止まって考える\n10/31", 12, 15), ("止まって考える\n10/28", 14, 15)]),
+        ("② 学び直しと対照(同じ 15 配置)", [("R0\n150 本", 8, 15), ("R1\n+すき間\n45 本", 10, 15),
                                      ("R2\n+手助け", 12, 15), ("R3\n+手助け", 12, 15),
                                      ("対照\nR1 のまま\n学習を延長", 14, 15)]),
-        ("③ 通し動作「片付けて」の自律化率", [("ラウンド 1", 13, 24), ("ラウンド 2", 15, 24)]),
+        ("③ 通し動作で自力で入った割合", [("ラウンド 1", 13, 24), ("ラウンド 2", 15, 24)]),
     ]
-    fig, axes = plt.subplots(1, 3, figsize=(11.5, 4.3), dpi=200, gridspec_kw={"width_ratios": [2.8, 4.6, 2]})
+    fig, axes = plt.subplots(1, 3, figsize=(11.5, 4.3), dpi=200, gridspec_kw={"width_ratios": [2.8, 4.6, 2.3]})
     for ax, (title, bars) in zip(axes, panels):
         xs = range(len(bars))
         for x, (label, k, n) in zip(xs, bars):
