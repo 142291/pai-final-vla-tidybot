@@ -112,75 +112,84 @@ def fit(text, path, size, maxw, low=24):
     return font(path, size)
 
 
-def head(d, title, en, lead, x, y, maxw, ts=64, ink="#f0efec", sub="#7fb2ee", body="#c3c2b7"):
-    """スライドの上部: 結論のタイトル(日本語)、英訳、詳細のリード文。描き終えた y を返す。"""
+# スライドは「段」の並びとして作る。段 0 がタイトル(結論)、そのあとリード文の 1 行ずつ、図の順に現れる。
+DARK = "#111111"
+
+
+def head(d, title, en, x, y, maxw, ts=64, ink="#f0efec", sub="#7fb2ee"):
+    """タイトル(結論)と英訳を描き、描き終えた y を返す。"""
     ft = fit(title, FONT_B, ts, maxw)
     for line in title.split("\n"):
         d.text((x, y), line, font=ft, fill=ink)
         y += int(ft.size * 1.35)
     if en:
-        fe = fit(en, FONT_R, 30, maxw)
-        d.text((x + 2, y + 4), en, font=fe, fill=sub)
+        d.text((x + 2, y + 4), en, font=fit(en, FONT_R, 30, maxw), fill=sub)
         y += 58
-    if lead:
-        fl = fit(lead, FONT_R, 34, maxw)
-        y += 14
-        for line in lead.split("\n"):
-            d.text((x + 2, y), line, font=fl, fill=body)
-            y += int(fl.size * 1.6)
     return y
 
 
-def card_png(path, title, en, lead=""):
-    im = Image.new("RGB", (W, H), "#111111")
+def lead_stages(im, lead, x, y, maxw, body="#c3c2b7", fs=34):
+    """リード文を 1 行ずつ足した段の画像を返す(im は書き換える)。描き終えた y も返す。"""
+    out = []
+    if not lead:
+        return out, y
+    fl = fit(lead, FONT_R, fs, maxw)
     d = ImageDraw.Draw(im)
-    head(d, title, en, lead, 140, 280, W - 280, ts=76)
-    im.save(path)
+    y += 14
+    for line in lead.split("\n"):
+        d.text((x + 2, y), line, font=fl, fill=body)
+        y += int(fl.size * 1.6)
+        out.append(im.copy())
+    return out, y
 
 
-def why_png(path, title, en, items):
-    """「なぜ取り組むか」の 1 枚。タイトルが結論、items は (日本語, 英語) の詳細。"""
-    im = Image.new("RGB", (W, H), "#111111")
+def card_stages(title, en, lead=""):
+    im = Image.new("RGB", (W, H), DARK)
+    y = head(ImageDraw.Draw(im), title, en, 140, 280, W - 280, ts=76)
+    st = [im.copy()]
+    more, _ = lead_stages(im, lead, 140, y, W - 280)
+    return st + more
+
+
+def why_stages(title, en, items):
+    im = Image.new("RGB", (W, H), DARK)
     d = ImageDraw.Draw(im)
-    y = head(d, title, en, "", 140, 150, W - 280, ts=60) + 70
+    y = head(d, title, en, 140, 150, W - 280, ts=60) + 70
+    st = [im.copy()]
     for k, (ja, en2) in enumerate(items):
         d.text((140, y), "●", font=font(FONT_B, 36), fill="#eb6834" if k == len(items) - 1 else "#7fb2ee")
         d.text((200, y - 4), ja, font=fit(ja, FONT_B, 42, W - 340), fill="#f0efec")
         d.text((200, y + 60), en2, font=font(FONT_R, 28), fill="#a9a8a0")
         y += 170
-    im.save(path)
+        st.append(im.copy())
+    return st
 
 
-def system_png(path, title, en, boxes, branch):
-    """しくみの全体図。boxes は左から右へ並ぶ (見出し, 説明) の箱、branch は判定の下に出る失敗時の流れ。"""
-    im = Image.new("RGB", (W, H), "#111111")
+def flow_stages(title, en, boxes, color="#7fb2ee", fill="#1b2430", lead=""):
+    """左から右へ並ぶ箱の流れ図。箱が 1 つずつ現れる。"""
+    im = Image.new("RGB", (W, H), DARK)
     d = ImageDraw.Draw(im)
-    head(d, title, en, "", 120, 110, W - 240, ts=56)
-    n, bw, gap, y0, bh = len(boxes), 300, 60, 360, 220
+    y = head(d, title, en, 120, 110, W - 240, ts=56)
+    st = [im.copy()]
+    more, y = lead_stages(im, lead, 120, y, W - 240)
+    st += more
+    n, bw, gap, bh = len(boxes), 330, 56, 250
+    y0 = max(380, y + 60)
     x0 = (W - (n * bw + (n - 1) * gap)) // 2
-    centers = []
     for k, (hd, body) in enumerate(boxes):
         x = x0 + k * (bw + gap)
-        d.rounded_rectangle([x, y0, x + bw, y0 + bh], radius=18, outline="#7fb2ee", width=4, fill="#1b2430")
-        d.text((x + 24, y0 + 24), hd, font=font(FONT_B, 36), fill="#f0efec")
-        yy = y0 + 84
+        if k > 0:
+            ax = x - gap + 8
+            d.line([ax, y0 + bh // 2, ax + gap - 24, y0 + bh // 2], fill="#f0efec", width=5)
+            d.polygon([(ax + gap - 24, y0 + bh // 2 - 12), (ax + gap - 12, y0 + bh // 2), (ax + gap - 24, y0 + bh // 2 + 12)], fill="#f0efec")
+        d.rounded_rectangle([x, y0, x + bw, y0 + bh], radius=18, outline=color, width=4, fill=fill)
+        d.text((x + 24, y0 + 24), hd, font=fit(hd, FONT_B, 38, bw - 40), fill="#f0efec")
+        yy = y0 + 90
         for line in body.split("\n"):
-            d.text((x + 24, yy), line, font=font(FONT_R, 26), fill="#c3c2b7")
-            yy += 38
-        if k < n - 1:
-            ax = x + bw + 8
-            d.line([ax, y0 + bh // 2, ax + gap - 16, y0 + bh // 2], fill="#f0efec", width=5)
-            d.polygon([(ax + gap - 16, y0 + bh // 2 - 12), (ax + gap - 4, y0 + bh // 2), (ax + gap - 16, y0 + bh // 2 + 12)], fill="#f0efec")
-        centers.append(x + bw // 2)
-    # 判定(最後の箱)の下に、失敗したときの流れ
-    cx = centers[-1]
-    d.line([cx, y0 + bh + 8, cx, y0 + bh + 70], fill="#eb6834", width=5)
-    d.text((cx + 16, y0 + bh + 18), "失敗", font=font(FONT_B, 30), fill="#eb6834")
-    bx1 = x0 + (n - 4) * (bw + gap)
-    d.rounded_rectangle([bx1, y0 + bh + 80, x0 + n * bw + (n - 1) * gap, y0 + bh + 200], radius=18, outline="#eb6834", width=4, fill="#2a1d18")
-    d.text((bx1 + 28, y0 + bh + 100), branch[0], font=font(FONT_B, 34), fill="#f0efec")
-    d.text((bx1 + 28, y0 + bh + 150), branch[1], font=font(FONT_R, 26), fill="#c3c2b7")
-    im.save(path)
+            d.text((x + 24, yy), line, font=fit(line, FONT_R, 28, bw - 40), fill="#c3c2b7")
+            yy += 42
+        st.append(im.copy())
+    return st
 
 
 def wilson(k, n, z=1.96):
@@ -191,41 +200,103 @@ def wilson(k, n, z=1.96):
     return c - h, c + h
 
 
-def bars_png(path, title, en, lead, bars):
-    """成功率の棒グラフ(95% 信頼区間つき)のスライド。タイトルが結論、リード文が詳細。"""
+def fig_image(fig):
+    import io
+    buf = io.BytesIO()
+    fig.savefig(buf, facecolor=SURFACE, format="png")
+    plt.close(fig)
+    buf.seek(0)
+    return Image.open(buf).convert("RGB")
+
+
+def bars_frame(title, en, lead_lines, bars, g):
+    """棒グラフのスライド 1 枚。lead_lines は見せる行、g は棒の伸び(None なら図を出さない、1 で完成)。"""
     fig = plt.figure(figsize=(W / 100, H / 100), dpi=100, facecolor=SURFACE)
     fig.text(0.06, 0.925, title, fontsize=36, color=INK, va="center", weight="bold")
     fig.text(0.061, 0.872, en, fontsize=19, color=BLUE, va="center")
-    fig.text(0.061, 0.835, lead, fontsize=21, color=INK2, va="top", linespacing=1.6)
-    ax = fig.add_axes([0.10, 0.18, 0.82, 0.44], facecolor=SURFACE)
-    for x, (label, k, n, col) in enumerate(bars):
-        p = k / n
-        lo, hi = wilson(k, n)
-        ax.bar(x, p * 100, width=0.56, color=col, zorder=2)
-        ax.errorbar(x, p * 100, yerr=[[p * 100 - lo * 100], [hi * 100 - p * 100]], color=INK2, capsize=8, lw=2, zorder=3)
-        ax.text(x, 4, f"{k}/{n}", ha="center", va="bottom", fontsize=22, color="white", zorder=4)
-        ax.text(x, hi * 100 + 3, f"{p * 100:.0f}%", ha="center", va="bottom", fontsize=30, color=INK, zorder=4)
-    ax.set_xticks(range(len(bars)), [b[0] for b in bars], fontsize=21)
-    ax.set_ylim(0, 115)
-    ax.set_yticks([0, 25, 50, 75, 100])
-    ax.tick_params(axis="y", labelsize=18)
-    ax.grid(axis="y", color="#e6e5e1", lw=1, zorder=0)
-    ax.set_ylabel("成功率(%) 縦線は 95% 信頼区間", fontsize=18)
-    fig.savefig(path, facecolor=SURFACE)
-    plt.close(fig)
+    if lead_lines:
+        fig.text(0.061, 0.835, "\n".join(lead_lines), fontsize=21, color=INK2, va="top", linespacing=1.6)
+    if g is not None:
+        ax = fig.add_axes([0.10, 0.18, 0.82, 0.44], facecolor=SURFACE)
+        for x, (label, k, n, col) in enumerate(bars):
+            p = k / n
+            lo, hi = wilson(k, n)
+            ax.bar(x, p * 100 * g, width=0.56, color=col, zorder=2)
+            if g >= 1:
+                ax.errorbar(x, p * 100, yerr=[[p * 100 - lo * 100], [hi * 100 - p * 100]], color=INK2, capsize=8, lw=2, zorder=3)
+                ax.text(x, 4, f"{k}/{n}", ha="center", va="bottom", fontsize=22, color="white", zorder=4)
+                ax.text(x, hi * 100 + 3, f"{p * 100:.0f}%", ha="center", va="bottom", fontsize=30, color=INK, zorder=4)
+        ax.set_xticks(range(len(bars)), [b[0] for b in bars], fontsize=21)
+        ax.set_xlim(-0.6, len(bars) - 0.4)
+        ax.set_ylim(0, 115)
+        ax.set_yticks([0, 25, 50, 75, 100])
+        ax.tick_params(axis="y", labelsize=18)
+        ax.grid(axis="y", color="#e6e5e1", lw=1, zorder=0)
+        ax.set_ylabel("成功率(%) 縦線は 95% 信頼区間", fontsize=18)
+    return fig_image(fig)
 
 
-def image_card_png(path, img, title, en, lead):
-    """説明資料の図のスライド。タイトルが結論、リード文が詳細。"""
+def bars_stages(title, en, lead, bars):
+    """段(タイトル、リード文の各行、空の図)と、棒が伸びるコマの並びを返す。"""
+    lines = lead.split("\n") if lead else []
+    st = [bars_frame(title, en, lines[:k], bars, None) for k in range(len(lines) + 1)]
+    grow = [bars_frame(title, en, lines, bars, 1 - (1 - f / 18) ** 3) for f in range(19)]
+    return st, grow
+
+
+def image_stages(img, title, en, lead):
+    """説明資料の図のスライド。タイトル → リード文 → 図の順に現れる。"""
     im = Image.new("RGB", (W, H), SURFACE)
-    d = ImageDraw.Draw(im)
-    y = head(d, title, en, lead, 115, 40, W - 230, ts=50, ink=INK, sub=BLUE, body=INK2)
+    y = head(ImageDraw.Draw(im), title, en, 115, 40, W - 230, ts=50, ink=INK, sub=BLUE)
+    st = [im.copy()]
+    more, y = lead_stages(im, lead, 115, y, W - 230, body=INK2)
+    st += more
     fig = Image.open(img).convert("RGB")
     box_w, box_h = W - 160, H - y - 30
     s = min(box_w / fig.width, box_h / fig.height)
     fig = fig.resize((int(fig.width * s), int(fig.height * s)), Image.LANCZOS)
     im.paste(fig, ((W - fig.width) // 2, y + 10))
-    im.save(path)
+    st.append(im.copy())
+    return st
+
+
+def slide_frames(stages, grow, dur, dirpath, step=0.75, fade=0.35):
+    """段を順に重ねる(各段は前の段から fade 秒で切り替わる)。concat 用の (画像, 秒) の並びを返す。"""
+    os.makedirs(dirpath, exist_ok=True)
+    nf = int(round(fade * FPS))
+    seq = []
+    prev = Image.new("RGB", (W, H), stages[0].getpixel((5, 5)))
+    t = 0.0
+    # 最後の段(と棒の伸び)が終わってから 2.5 秒以上読めるように、段の間隔を詰める
+    room = dur - 2.5 - 0.4 - fade - (0.4 + 19 / FPS if grow else 0)
+    step = min(step, room / max(1, len(stages) - 1))
+    keys = [(0.0 if k == 0 else 0.4 + step * k, im) for k, im in enumerate(stages)]
+    for tk, im in keys:
+        if tk > t:
+            seq.append((prev, tk - t))
+            t = tk
+        for j in range(1, nf + 1):
+            seq.append((Image.blend(prev, im, j / nf), 1 / FPS))
+        t += nf / FPS
+        prev = im
+    if grow:
+        tg = t + 0.4
+        seq.append((prev, tg - t))
+        t = tg
+        for im in grow:
+            seq.append((im, 1 / FPS))
+        t += len(grow) / FPS
+        prev = grow[-1]
+    seq.append((prev, max(0.1, dur - t)))
+    lst = os.path.join(dirpath, "list.txt")
+    with open(lst, "w") as f:
+        fp = None
+        for k, (im, d) in enumerate(seq):
+            fp = os.path.join(dirpath, f"{k:04d}.jpg")
+            im.save(fp, quality=93)
+            f.write(f"file '{fp}'\nduration {d:.4f}\n")
+        f.write(f"file '{fp}'\n")
+    return lst
 
 
 # ---------------------------------------------------------------- 場面
@@ -253,33 +324,32 @@ SCENES = [
     ]),
     S("title", card=("VLA が掴めない原因を切り分け、\n言葉で頼める片付けロボットにした",
                      "Why couldn't my VLA grasp? Tracking down the causes on a real SO-101",
-                     "自前データで π0.5 を学習。原因は「アクションチャンクの実行の仕方」と「デモに無い状況」だった"), dur=5),
+                     "自前データで π0.5 を学習。原因は「アクションチャンクの実行の仕方」と「デモに無い状況」だった。"), dur=5),
     S("why", why=("クラウドの GPU で VLA を動かすと約 1 秒遅れ、実機では掴み損ねた",
                   "Running the VLA on a cloud GPU added ~1 s of lag, and the real arm missed the grasp", [
-        ("観測から行動が届くまで約 1 秒(推論遅延)。そのあいだもアームは動いている", "~1 s round trip from observation to action, while the arm keeps moving"),
-        ("学習は順調でも、実機では「すぐ横まで行って掴めない」が起きる", "Training looks fine, yet the real robot hovers and misses"),
-        ("原因を切り分けて直す。それでも失敗したら理由を説明して人に頼む", "Find and fix the cause; when it still fails, explain why and ask a human"),
+        ("観測から行動が届くまで約 1 秒(推論遅延)。そのあいだもアームは動いている。", "~1 s round trip from observation to action, while the arm keeps moving"),
+        ("学習は順調でも、実機では「すぐ横まで行って掴めない」が起きる。", "Training looks fine, yet the real robot hovers and misses"),
+        ("原因を切り分けて直す。それでも失敗したら理由を説明して人に頼む。", "Find and fix the cause; when it still fails, explain why and ask a human"),
     ]), dur=6),
-    S("system", system=("言葉で頼むと、Claude が段取りを決め、π0.5 が動かす",
+    S("system", flow=("言葉で頼むと、Claude が段取りを決め、π0.5 が動かす",
                         "Ask in words: Claude plans the order, π0.5 moves the arm", [
         ("言葉で頼む", "「紫以外を\n片付けて」"), ("段取り", "Claude が俯瞰の\n画像を見て色の\n順番を決める"),
-        ("動かす", "π0.5(自前データで\n学習)を H200 で\n推論、同期実行"), ("判定", "俯瞰カメラで\n箱の中に 1 秒\n止まったら成功")],
-        ("Claude が失敗の理由を説明 → やり直し(3 回まで)→ 人を呼ぶ", "人はリーダーアームで引き取る(操作は学習データとして保存)")), dur=6),
+        ("動かす", "π0.5(自前データで\n学習)を H200 で\n推論、同期実行"), ("判定", "俯瞰カメラで\n箱の中に 1 秒\n止まったら成功")]), dur=6),
     S("diagnose", image=("fig_horizon.png", "アクションチャンクは先ほど外れ、遅延のあいだにその後半を実行していた",
                          "The action chunk drifts further out, and the ~1 s lag meant executing its least accurate tail",
-                         "人の操作と比べた予測の誤差は、0〜5 ステップ目 3.3 → 35〜50 ステップ目 13.1 と、先ほど大きい\n"
-                         "推論遅延が約 1 秒あるので、非同期実行では届いた時点で前半を飛ばし、外れやすい後半を実行していた(最有力の原因)"), dur=12),
+                         "人の操作と比べた予測の誤差は、0〜5 ステップ目 3.3 → 35〜50 ステップ目 13.1 と、先ほど大きい。\n"
+                         "推論遅延が約 1 秒あるので、非同期実行では届いた時点で前半を飛ばし、外れやすい後半を実行していた(最有力の原因)。"), dur=10),
     S("fix", bars=("同期実行に変えると、成功率は 33% → 80%",
                    "Synchronous execution: 33% → 80% with the same model (after the additional training shown next)",
-                   "アクションチャンクの先頭 15 ステップ(0.5 秒)だけ動かして止まり、最新の画像で推論し直す(止まって考える)\n"
-                   "講義(基礎編 第 7 回)の通り同期実行は止まるが、遅延が約 1 秒あるこの構成では、非同期実行より確実に掴めた\n"
-                   "比べたのは、この後で説明する追加学習を終えたモデル。同じモデル・同じ晩・決めた 15 配置で、実行の仕方だけを変えた", [
+                   "アクションチャンクの先頭 15 ステップ(0.5 秒)だけ動かして止まり、最新の画像で推論し直す(止まって考える)。\n"
+                   "講義(基礎編 第 7 回)の通り同期実行は止まるが、遅延が約 1 秒あるこの構成では、非同期実行より確実に掴めた。\n"
+                   "比べたのは、この後で説明する追加学習を終えたモデル。同じモデル・同じ晩・決めた 15 配置で、実行の仕方だけを変えた。", [
         ("非同期実行", 5, 15, MUTED), ("同期実行(止まって考える)", 12, 15, BLUE)]), dur=10),
     S("data", bars=("足りない状況のデモを 45 本足すと、1 個入った後も止まらなくなった",
                     "Adding 45 demos for missing situations: no more freezing after the first cube",
-                    "最初のデモ 144 本には、箱にキューブが入った状態から始まるものが 1 本も無く、1 個目を入れると止まっていた\n"
-                    "その状態と、置き場所のすき間のデモを 45 本足して追加学習。止まった観測を再生すると、動こうとする量は 1.6 → 120.8\n"
-                    "ここからの成功率はすべて同期実行。53% → 67%(学習の step も増えているので、デモだけの効果とは言い切れない)", [
+                    "最初のデモ 144 本には、箱にキューブが入った状態から始まるものが 1 本も無く、1 個目を入れると止まっていた。\n"
+                    "その状態と、置き場所のすき間のデモを 45 本足して追加学習。止まった観測を再生すると、動こうとする量は 1.6 → 120.8。\n"
+                    "ここからの成功率はすべて同期実行。53% → 67%(学習の step も増えているので、デモだけの効果とは言い切れない)。", [
         ("最初のモデル\n(デモ 144 本)", 8, 15, MUTED), ("+ 箱に入った状態・\nすき間のデモ 45 本", 10, 15, BLUE)]), dur=10),
     S("hook", clip=ph("A_except_purple.mp4", 6.0, 17.0), chapter="言葉で頼む", caps=[
         (0, 1.3, "指示「紫以外を片付けて」", "Instruction: \"Tidy up everything except purple\"", None),
@@ -295,6 +365,12 @@ SCENES = [
         (6.0, 10.0, "すみません、緑のものは見当たらないので入れられません。", "\"Sorry, I don't see anything green, so I can't put it in.\"", "ロボット"),
         (10.0, 11.8, "机の上を見て、できないことは断る", "It checks the table and declines what it can't do", None),
     ]),
+    S("failflow", flow=("工夫: 失敗したら、理由を説明してやり直し、だめなら人を呼ぶ",
+                          "When it fails: Claude explains why, retries up to 3 times, then calls a human", [
+        ("失敗", "箱に入らない\n(掴めない など)"), ("理由を説明", "Claude が試行中の\n画像を見て\n言葉で説明する"),
+        ("やり直す", "同じ指示で\nもう一度\n(3 回まで)"), ("人を呼ぶ", "リーダーアームで\n引き取る(介入)\n→ 学習データに保存")],
+        "#eb6834", "#2a1d18",
+        "人に頼むときも、何がうまくいかなかったかを言葉で伝える。人の操作は、次の学習に使うデータになる。"), dur=5),
     S("explain", clip=ph("D_red_only_human.mp4", 72.0, 80.0), chapter="失敗したら人を呼ぶ", caps=[
         (0, 8, "「赤だけ入れて」。苦手な置き場所(真ん中)では、すぐ横まで行って掴めない",
          "\"Put only the red one in.\" At a hard placement it gets right next to the cube and misses", None),
@@ -318,10 +394,9 @@ SCENES = [
     ]),
     S("relearn", bars=("人の介入を学習に足すと、67% → 80%",
                        "Adding human-intervention data: 67% → 80%",
-                       "ロボットが失敗した場面だけ人がリーダーアームで引き取り(介入)、その操作を学習データに足した\n"
-                       "どちらも同じモデルから、同じだけ(+4,000 step)追加学習。違いは介入のデータを入れたかだけ\n"
-                       "ただし差は 15 試行中 2 回で、言い切るには試行を増やす必要がある\n"
-                       "※ 介入なしのモデルの評価では、作者が指で手を貸した 4 回があり、失敗として数えた", [
+                       "ロボットが失敗した場面だけ人がリーダーアームで引き取り(介入)、その操作を学習データに足した。\n"
+                       "どちらも同じモデルから、同じだけ(+4,000 step)追加学習。違いは介入のデータを入れたかだけ。\n"
+                       "ただし差は 15 試行中 2 回で、言い切るには試行を増やす必要がある。", [
         ("介入のデータなし", 10, 15, MUTED), ("介入のデータあり", 12, 15, BLUE)]), dur=10),
     S("end", card=("github.com/142291/pai-final-vla-tidybot", "コード・試行ごとの評価記録・説明資料(PDF)を公開 / Code, per-trial logs and the report",
                    "同期実行に変えるだけで 33% → 80%(同じモデル・同じ晩・同じ 15 配置)\n"
@@ -475,20 +550,22 @@ def render(sc, i):
         vf = f"[0:v]fps={FPS},format=yuv420p,setsar=1[base]"
         render_with_overlays(["-f", "concat", "-safe", "0", "-i", lst] + silent(), vf, dur, ovs, out, ["-map", "1:a"])
     else:
-        png = os.path.join(WORK, f"s{i:02d}_bg.png")
+        grow = None
         if "card" in sc:
-            card_png(png, *sc["card"])
+            st = card_stages(*sc["card"])
         elif "bars" in sc:
-            bars_png(png, *sc["bars"])
+            st, grow = bars_stages(*sc["bars"])
         elif "why" in sc:
-            why_png(png, *sc["why"])
-        elif "system" in sc:
-            system_png(png, *sc["system"])
+            st = why_stages(*sc["why"])
+        elif "flow" in sc:
+            st = flow_stages(*sc["flow"])
         elif "image" in sc:
-            image_card_png(png, os.path.join(FIG, sc["image"][0]), *sc["image"][1:])
+            st = image_stages(os.path.join(FIG, sc["image"][0]), *sc["image"][1:])
+        (grow[-1] if grow else st[-1]).save(os.path.join(WORK, f"s{i:02d}_bg.png"))
         dur = sc["dur"]
+        lst = slide_frames(st, grow, dur, os.path.join(WORK, f"s{i:02d}_anim"))
         vf = f"[0:v]fps={FPS},format=yuv420p,setsar=1[base]"
-        render_with_overlays(["-loop", "1", "-t", str(dur), "-i", png] + silent(), vf, dur, ovs, out, ["-map", "1:a"])
+        render_with_overlays(["-f", "concat", "-safe", "0", "-i", lst] + silent(), vf, dur, ovs, out, ["-map", "1:a"])
     return out
 
 
@@ -508,6 +585,14 @@ def main():
             print(f"[{i}] {sc['name']} を作る")
             render(sc, i)
         parts.append(out)
+    # 本編だけをつないで BGM を重ねる(運営のジングルには重ねない)
+    lst = os.path.join(WORK, "body.txt")
+    with open(lst, "w") as f:
+        f.writelines(f"file '{p}'\n" for p in parts)
+    body = os.path.join(WORK, "body.mp4")
+    run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", lst, "-c", "copy", body])
+    parts = [os.path.join(WORK, "body_bgm.mp4")]
+    add_bgm(body, parts[0])
     if jo:
         parts.insert(0, normalize(jo, "jingle_open"))
     if je:
@@ -521,6 +606,66 @@ def main():
     d = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", final],
                              capture_output=True, text=True).stdout)
     print(f"保存: {final}({d:.1f} 秒)")
+
+
+def make_bgm(path, dur, sr=48000):
+    """BGM をその場で合成する(外部の音源を使わないので権利の心配が無い)。
+    ゆったりした 4 和音の繰り返し: 柔らかい和音(パッド)+ 8 分音符の分散和音 + 低音。"""
+    import wave
+
+    import numpy as np
+    bpm = 84
+    beat = 60 / bpm
+    bar = beat * 4
+    chords = [[60, 64, 67, 71], [57, 60, 64, 67], [53, 57, 60, 64], [55, 59, 62, 67]]   # Cmaj7 Am7 Fmaj7 G
+    hz = lambda m: 440 * 2 ** ((m - 69) / 12)
+    n = int(dur * sr)
+    t = np.arange(n) / sr
+    out = np.zeros((n, 2))
+    k = 0
+    while k * bar < dur:
+        ch = chords[k % 4]
+        a, b = int(k * bar * sr), min(n, int((k + 1) * bar * sr))
+        tt = t[a:b] - k * bar
+        env = np.minimum(1, tt / 0.6) * np.minimum(1, (bar - tt) / 0.6)
+        pad = sum(np.sin(2 * np.pi * hz(m) * tt) + 0.3 * np.sin(2 * np.pi * hz(m) * 2.003 * tt) for m in ch) / len(ch)
+        out[a:b, 0] += 0.22 * env * pad
+        out[a:b, 1] += 0.22 * env * pad
+        bass = np.sin(2 * np.pi * hz(ch[0] - 12) * tt) * env
+        out[a:b] += 0.18 * bass[:, None]
+        for j in range(8):   # 分散和音(8 分音符)、左右に少し振る
+            s0 = a + int(j * beat / 2 * sr)
+            if s0 >= n:
+                break
+            ln = min(n - s0, int(1.2 * sr))
+            tp = np.arange(ln) / sr
+            m = ch[[0, 2, 1, 3, 2, 1, 3, 2][j]] + 12
+            note = np.sin(2 * np.pi * hz(m) * tp) * np.exp(-tp * 4.0) * 0.16
+            pan = 0.5 + 0.3 * np.sin(j)
+            out[s0:s0 + ln, 0] += note * (1 - pan)
+            out[s0:s0 + ln, 1] += note * pan
+        k += 1
+    fade = np.minimum(1, np.minimum(t / 1.5, (dur - t) / 2.5))[:, None]
+    out = out * fade
+    out = out / np.abs(out).max() * 0.8
+    with wave.open(path, "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(sr)
+        w.writeframes((out * 32767).astype("<i2").tobytes())
+
+
+def add_bgm(src, out, vol=0.22):
+    """本編に BGM を重ねる。ロボットの声などの元の音がある間は BGM を自動で下げる(sidechaincompress)。"""
+    d = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", src],
+                             capture_output=True, text=True).stdout)
+    wav = os.path.join(WORK, "bgm.wav")
+    make_bgm(wav, d)
+    fc = (f"[0:a]asplit=2[orig][key];[1:a]volume={vol}[bg];"
+          f"[bg][key]sidechaincompress=threshold=0.03:ratio=6:attack=30:release=600[duck];"
+          f"[orig][duck]amix=inputs=2:duration=first:normalize=0[a]")
+    run(["ffmpeg", "-v", "error", "-y", "-i", src, "-i", wav, "-filter_complex", fc, "-map", "0:v", "-map", "[a]",
+         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", out])
 
 
 def normalize(src, name):
