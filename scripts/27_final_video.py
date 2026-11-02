@@ -563,6 +563,9 @@ def render(sc, i):
             st = image_stages(os.path.join(FIG, sc["image"][0]), *sc["image"][1:])
         (grow[-1] if grow else st[-1]).save(os.path.join(WORK, f"s{i:02d}_bg.png"))
         dur = sc["dur"]
+        # アニメーションは使わない(完成した 1 枚を出す)。使うときは ANIMATE=1
+        if os.environ.get("ANIMATE") != "1":
+            st, grow = [grow[-1] if grow else st[-1]], None
         lst = slide_frames(st, grow, dur, os.path.join(WORK, f"s{i:02d}_anim"))
         vf = f"[0:v]fps={FPS},format=yuv420p,setsar=1[base]"
         render_with_overlays(["-f", "concat", "-safe", "0", "-i", lst] + silent(), vf, dur, ovs, out, ["-map", "1:a"])
@@ -591,8 +594,10 @@ def main():
         f.writelines(f"file '{p}'\n" for p in parts)
     body = os.path.join(WORK, "body.mp4")
     run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", lst, "-c", "copy", body])
-    parts = [os.path.join(WORK, "body_bgm.mp4")]
-    add_bgm(body, parts[0])
+    parts = [body]
+    if os.environ.get("BGM") == "1":   # BGM は使わない(使うときは BGM=1)
+        parts = [os.path.join(WORK, "body_bgm.mp4")]
+        add_bgm(body, parts[0])
     if jo:
         parts.insert(0, normalize(jo, "jingle_open"))
     if je:
